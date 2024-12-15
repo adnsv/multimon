@@ -13,6 +13,9 @@ A Go package for handling window positioning and sizing across multiple monitors
   - Overlap area with monitors
   - Edge distance when no overlap exists
   - Minimum size requirements
+- Initial window placement with:
+  - Margin support with minimum size guarantees
+  - Automatic centering in work area
 - Cross-platform support (Windows, Linux, macOS)
 - Handles various edge cases:
   - Windows spanning multiple monitors
@@ -25,6 +28,8 @@ A Go package for handling window positioning and sizing across multiple monitors
 ```bash
 go get github.com/adnsv/multimon
 ```
+
+This package has no external Go dependencies - it only uses the standard library and CGO bindings to system libraries.
 
 ## Platform Support
 
@@ -42,3 +47,24 @@ Each platform implementation provides:
 For non-Windows platforms, this package requires CGO and the appropriate development packages:
 - **Linux**: `gtk3-dev` (or `libgtk-3-dev` on Debian/Ubuntu)
 - **macOS**: Xcode Command Line Tools (provides Foundation, Cocoa, and AppKit frameworks)
+  ```bash
+  xcode-select --install
+  ```
+
+## Usage
+
+### Initial Window Placement
+
+```go
+// Get initial window placement on default monitor (containing 0,0 or largest)
+rect := multimon.InitialPlacement(
+    minWidth,    // minimum required width
+    minHeight,   // minimum required height
+    desiredWidth,    // preferred width
+    desiredHeight,   // preferred height
+    margin,      // minimum distance from work area edges
+)
+// rect contains window position centered in work area
+```
+
+All coordinates and dimensions are in logical (scaled) pixels, accounting for system DPI settings.
