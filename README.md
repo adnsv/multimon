@@ -36,7 +36,6 @@ Each platform implementation provides:
 - Monitor enumeration
 - Physical and logical monitor bounds
 - Work area detection (accounting for taskbars/docks)
-- Primary monitor identification
 
 ### Dependencies
 
