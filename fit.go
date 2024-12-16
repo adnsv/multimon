@@ -58,8 +58,15 @@ func FitToMonitor(m *Monitor, mode FitMode, window Rect, windowScale float64) (R
 	if windowScale == 0.0 {
 		targetWindow = window
 	} else {
-		// Adjust window size based on scale difference
-		targetWindow = scaleRect(window, m.Scale/windowScale)
+		// Scale window dimensions relative to top-left corner
+		scaledWidth := int(float64(window.Right-window.Left) * (m.Scale / windowScale))
+		scaledHeight := int(float64(window.Bottom-window.Top) * (m.Scale / windowScale))
+		targetWindow = Rect{
+			Left:   window.Left,
+			Top:    window.Top,
+			Right:  window.Left + scaledWidth,
+			Bottom: window.Top + scaledHeight,
+		}
 	}
 
 	// Fit dimensions and positions within bounds
@@ -155,9 +162,14 @@ func FitToNearestMonitor(monitors []Monitor, mode FitMode, window Rect, windowSc
 				bounds = m.WorkArea
 			}
 
+			factor := 1.0
+			if windowScale > 0.0 {
+				factor = m.Scale / windowScale
+			}
+
 			// Check if monitor can fit minimum dimensions
-			screenMinWidth := int(float64(minWidth) * m.Scale)
-			screenMinHeight := int(float64(minHeight) * m.Scale)
+			screenMinWidth := int(float64(minWidth) * factor)
+			screenMinHeight := int(float64(minHeight) * factor)
 			width := bounds.Right - bounds.Left
 			height := bounds.Bottom - bounds.Top
 

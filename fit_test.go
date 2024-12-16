@@ -34,13 +34,12 @@ func TestFitToMonitor(t *testing.T) {
 			wantScale: 1.5,
 		},
 		{
-			name:    "window with custom scale 1.25",
-			monitor: monitor,
-			mode:    FitModeBounds,
-
+			name:      "window with custom scale 1.25",
+			monitor:   monitor,
+			mode:      FitModeBounds,
 			window:    Rect{100, 100, 300, 300},
 			scale:     1.25,
-			want:      Rect{120, 120, 360, 360},
+			want:      Rect{100, 100, 340, 340},
 			wantScale: 1.5,
 		},
 		{
@@ -49,7 +48,18 @@ func TestFitToMonitor(t *testing.T) {
 			mode:      FitModeBounds,
 			window:    Rect{100, 100, 300, 300},
 			scale:     2.0,
-			want:      Rect{75, 75, 225, 225},
+			want:      Rect{100, 100, 250, 250},
+			wantScale: 1.5,
+		},
+
+		// Test rescaling that causes window to protrude
+		{
+			name:      "window near edge with scale up",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{1800, 900, 1900, 1000},
+			scale:     0.5,                         // Scaling from 0.5 to 1.5 means 3x size increase
+			want:      Rect{1620, 780, 1920, 1080}, // Window grows and gets moved to stay within bounds
 			wantScale: 1.5,
 		},
 
@@ -449,8 +459,80 @@ func TestFitToNearestMonitor(t *testing.T) {
 			mode:      FitModeBounds,
 			window:    Rect{100, 100, 300, 300},
 			scale:     2.0,
-			want:      Rect{50, 50, 150, 150},
-			wantScale: 1.0, // primary monitor's scale
+			want:      Rect{100, 100, 200, 200}, // Shrinks from top-left: width/height * (1.0/2.0) = 200 * 0.5 = 100
+			wantScale: 1.0,                      // primary monitor's scale
+		},
+
+		// Window scale tests
+		{
+			name:     "window designed for 1.0 scale on 1.5 monitor",
+			monitors: monitors[1:2], // Only secondary monitor
+			mode:     FitModeBounds,
+			window:   Rect{2000, 100, 2200, 300},
+			scale:    1.0,
+			want: Rect{
+				Left:   2000,
+				Top:    100,
+				Right:  2300, // Width increased by 1.5x
+				Bottom: 400,  // Height increased by 1.5x
+			},
+			wantScale: 1.5,
+		},
+		{
+			name:     "window designed for 2.0 scale on 1.0 monitor",
+			monitors: monitors[0:1], // Only primary monitor
+			mode:     FitModeBounds,
+			window:   Rect{100, 100, 500, 300},
+			scale:    2.0,
+			want: Rect{
+				Left:   100,
+				Top:    100,
+				Right:  300, // Width reduced by 0.5x
+				Bottom: 200, // Height reduced by 0.5x
+			},
+			wantScale: 1.0,
+		},
+		{
+			name:     "window designed for 1.25 scale on 1.5 monitor",
+			monitors: monitors[1:2], // Only secondary monitor
+			mode:     FitModeBounds,
+			window:   Rect{2000, 100, 2250, 350},
+			scale:    1.25,
+			want: Rect{
+				Left:   2000,
+				Top:    100,
+				Right:  2300, // Width increased by 1.5/1.25x
+				Bottom: 400,  // Height increased by 1.5/1.25x
+			},
+			wantScale: 1.5,
+		},
+		{
+			name:     "window designed for 1.5 scale on 1.25 monitor",
+			monitors: monitors[2:3], // Only small monitor
+			mode:     FitModeBounds,
+			window:   Rect{100, 1100, 400, 1400},
+			scale:    1.5,
+			want: Rect{
+				Left:   100,
+				Top:    1100,
+				Right:  350,  // Width reduced by 1.25/1.5x
+				Bottom: 1350, // Height reduced by 1.25/1.5x
+			},
+			wantScale: 1.25,
+		},
+		{
+			name:     "window with zero scale on 1.5 monitor",
+			monitors: monitors[1:2], // Only secondary monitor
+			mode:     FitModeBounds,
+			window:   Rect{2000, 100, 2200, 300},
+			scale:    0.0,
+			want: Rect{
+				Left:   2000,
+				Top:    100,
+				Right:  2200,
+				Bottom: 300,
+			},
+			wantScale: 1.5,
 		},
 	}
 

@@ -71,16 +71,6 @@ func fitRectDimension(pos, size, boundsMin, boundsMax int) (newPos, newSize int)
 	return pos, size
 }
 
-// scaleRect scales a rectangle by the given scale factor
-func scaleRect(r Rect, scale float64) Rect {
-	return Rect{
-		Left:   int(float64(r.Left) * scale),
-		Top:    int(float64(r.Top) * scale),
-		Right:  int(float64(r.Right) * scale),
-		Bottom: int(float64(r.Bottom) * scale),
-	}
-}
-
 // min returns the smaller of two integers
 func min(a, b int) int {
 	if a < b {
