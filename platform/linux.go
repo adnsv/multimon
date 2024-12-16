@@ -32,7 +32,7 @@ Monitor GetMonitorInfo(GdkMonitor *monitor) {
     // Get integer scale factor (GTK3 only supports integer scaling)
     result.scaleFactor = gdk_monitor_get_scale_factor(monitor);
 
-    // Store logical (scaled) coordinates
+    // Store screen coordinates
     result.x = geometry.x;
     result.y = geometry.y;
     result.width = geometry.width;
@@ -78,41 +78,21 @@ func GetPlatformMonitors() []types.Monitor {
 		info := C.GetMonitorInfo(monitor)
 		scale := float64(info.scaleFactor)
 
-		// Logical bounds are what we get directly from GTK
-		logicalBounds := types.Rect{
-			Left:   int(info.x),
-			Top:    int(info.y),
-			Right:  int(info.x + info.width),
-			Bottom: int(info.y + info.height),
-		}
-
-		logicalWorkArea := types.Rect{
-			Left:   int(info.workX),
-			Top:    int(info.workY),
-			Right:  int(info.workX + info.workWidth),
-			Bottom: int(info.workY + info.workHeight),
-		}
-
-		// Physical bounds are logical bounds multiplied by scale factor
-		physicalBounds := types.Rect{
-			Left:   int(float64(logicalBounds.Left) * scale),
-			Top:    int(float64(logicalBounds.Top) * scale),
-			Right:  int(float64(logicalBounds.Right) * scale),
-			Bottom: int(float64(logicalBounds.Bottom) * scale),
-		}
-
-		physicalWorkArea := types.Rect{
-			Left:   int(float64(logicalWorkArea.Left) * scale),
-			Top:    int(float64(logicalWorkArea.Top) * scale),
-			Right:  int(float64(logicalWorkArea.Right) * scale),
-			Bottom: int(float64(logicalWorkArea.Bottom) * scale),
-		}
-
+		// Create monitor with screen coordinates and scale factor
 		m := types.Monitor{
-			LogicalBounds:    logicalBounds,
-			LogicalWorkArea:  logicalWorkArea,
-			PhysicalBounds:   physicalBounds,
-			PhysicalWorkArea: physicalWorkArea,
+			Bounds: types.Rect{
+				Left:   int(info.x),
+				Top:    int(info.y),
+				Right:  int(info.x + info.width),
+				Bottom: int(info.y + info.height),
+			},
+			WorkArea: types.Rect{
+				Left:   int(info.workX),
+				Top:    int(info.workY),
+				Right:  int(info.workX + info.workWidth),
+				Bottom: int(info.workY + info.workHeight),
+			},
+			Scale: scale,
 		}
 
 		monitors = append(monitors, m)

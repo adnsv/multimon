@@ -53,15 +53,8 @@ type MONITORINFO struct {
 const (
 	MONITORINFOF_PRIMARY = 0x1
 	MDT_EFFECTIVE_DPI    = 0
-	defaultDPI           = 96
+	defaultWindowsDPI    = 96
 )
-
-func scaleToDefaultDPI(value int, dpi uint32) int {
-	if dpi == defaultDPI {
-		return value
-	}
-	return (value * defaultDPI) / int(dpi)
-}
 
 func GetPlatformMonitors() []types.Monitor {
 	var monitors []types.Monitor
@@ -101,44 +94,26 @@ func GetPlatformMonitors() []types.Monitor {
 
 		// Default to 96 if all methods fail
 		if dpiX == 0 {
-			dpiX = defaultDPI
+			dpiX = defaultWindowsDPI
 		}
 
-		// Physical bounds are what we get directly from Windows
-		physicalBounds := types.Rect{
-			Left:   int(mi.RcMonitor.Left),
-			Top:    int(mi.RcMonitor.Top),
-			Right:  int(mi.RcMonitor.Right),
-			Bottom: int(mi.RcMonitor.Bottom),
-		}
-
-		physicalWorkArea := types.Rect{
-			Left:   int(mi.RcWork.Left),
-			Top:    int(mi.RcWork.Top),
-			Right:  int(mi.RcWork.Right),
-			Bottom: int(mi.RcWork.Bottom),
-		}
-
-		// Logical bounds are physical bounds scaled to default DPI
-		logicalBounds := types.Rect{
-			Left:   scaleToDefaultDPI(physicalBounds.Left, dpiX),
-			Top:    scaleToDefaultDPI(physicalBounds.Top, dpiX),
-			Right:  scaleToDefaultDPI(physicalBounds.Right, dpiX),
-			Bottom: scaleToDefaultDPI(physicalBounds.Bottom, dpiX),
-		}
-
-		logicalWorkArea := types.Rect{
-			Left:   scaleToDefaultDPI(physicalWorkArea.Left, dpiX),
-			Top:    scaleToDefaultDPI(physicalWorkArea.Top, dpiX),
-			Right:  scaleToDefaultDPI(physicalWorkArea.Right, dpiX),
-			Bottom: scaleToDefaultDPI(physicalWorkArea.Bottom, dpiX),
-		}
+		// Calculate scale factor (1.0 = 100%, 1.5 = 150%, 2.0 = 200%, etc.)
+		scale := float64(dpiX) / float64(defaultWindowsDPI)
 
 		monitor := types.Monitor{
-			LogicalBounds:    logicalBounds,
-			LogicalWorkArea:  logicalWorkArea,
-			PhysicalBounds:   physicalBounds,
-			PhysicalWorkArea: physicalWorkArea,
+			Bounds: types.Rect{
+				Left:   int(mi.RcMonitor.Left),
+				Top:    int(mi.RcMonitor.Top),
+				Right:  int(mi.RcMonitor.Right),
+				Bottom: int(mi.RcMonitor.Bottom),
+			},
+			WorkArea: types.Rect{
+				Left:   int(mi.RcWork.Left),
+				Top:    int(mi.RcWork.Top),
+				Right:  int(mi.RcWork.Right),
+				Bottom: int(mi.RcWork.Bottom),
+			},
+			Scale: scale,
 		}
 
 		monitors = append(monitors, monitor)

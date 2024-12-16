@@ -11,7 +11,7 @@ package platform
 #include <AppKit/AppKit.h>
 #include <stdlib.h>
 
-typedef struct Monitor {
+typedef struct monitorInfo {
     int x;
     int y;
     int width;
@@ -20,15 +20,14 @@ typedef struct Monitor {
     int workY;
     int workWidth;
     int workHeight;
-    int isPrimary;
-} Monitor;
+} monitorInfo;
 
 int GetNumMonitors() {
     return [[NSScreen screens] count];
 }
 
-Monitor GetMonitorInfo(int nth) {
-    Monitor result;
+monitorInfo GetMonitorInfo(int nth) {
+    monitorInfo result;
     NSArray<NSScreen *> *screens = [NSScreen screens];
     NSScreen* screen = [screens objectAtIndex:nth];
 
@@ -45,9 +44,6 @@ Monitor GetMonitorInfo(int nth) {
     result.workY = (int)visibleFrame.origin.y;
     result.workWidth = (int)visibleFrame.size.width;
     result.workHeight = (int)visibleFrame.size.height;
-
-    // First screen is primary
-    result.isPrimary = (nth == 0);
 
     return result;
 }
@@ -68,28 +64,21 @@ func GetPlatformMonitors() []types.Monitor {
 	for i := 0; i < numMonitors; i++ {
 		info := C.GetMonitorInfo(C.int(i))
 
-		// Logical bounds are what we get directly from Cocoa
-		logicalBounds := types.Rect{
-			Left:   int(info.x),
-			Top:    int(info.y),
-			Right:  int(info.x + info.width),
-			Bottom: int(info.y + info.height),
-		}
-
-		// Work area (visible frame)
-		logicalWorkArea := types.Rect{
-			Left:   int(info.workX),
-			Top:    int(info.workY),
-			Right:  int(info.workX + info.workWidth),
-			Bottom: int(info.workY + info.workHeight),
-		}
-
-		// On macOS, logical and physical are the same since scaling is handled by the system
+		// Create monitor with screen coordinates in points (macOS native units)
 		m := types.Monitor{
-			LogicalBounds:    logicalBounds,
-			LogicalWorkArea:  logicalWorkArea,
-			PhysicalBounds:   logicalBounds,   // Same as logical on macOS
-			PhysicalWorkArea: logicalWorkArea, // Same as logical on macOS
+			Bounds: types.Rect{
+				Left:   int(info.x),
+				Top:    int(info.y),
+				Right:  int(info.x + info.width),
+				Bottom: int(info.y + info.height),
+			},
+			WorkArea: types.Rect{
+				Left:   int(info.workX),
+				Top:    int(info.workY),
+				Right:  int(info.workX + info.workWidth),
+				Bottom: int(info.workY + info.workHeight),
+			},
+			Scale: 1.0, // Always 1.0 since we work with screen points
 		}
 
 		monitors = append(monitors, m)

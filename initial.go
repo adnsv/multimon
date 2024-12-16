@@ -1,72 +1,79 @@
 package multimon
 
-// InitialPlacement calculates the initial window placement on a default monitor.
-// The default monitor is either:
-// - The monitor containing point (0,0) in logical coordinates
-// - If no monitor contains (0,0), the monitor with largest logical area
-//
-// All calculations are performed in logical (scaled) coordinates, accounting for
-// the system's DPI settings and scaling factors.
+// CalcPlacementSize calculates the window size in screen units, attempting to satisfy
+// the desired size while fitting within monitor bounds:
+// 1. Converts desired size to screen units using monitor's scale
+// 2. Attempts to fit within work area minus margins
+// 3. If needed, allows using margin area to satisfy minimum size
 //
 // Parameters:
-// - minWidth, minHeight: minimum required window size in logical pixels
-// - desiredWidth, desiredHeight: preferred window size in logical pixels (will be clamped if exceeds work area)
-// - margin: minimum distance from work area edges in logical pixels
+// - desiredWidth, desiredHeight: preferred window size in logical units
+// - minWidth, minHeight: minimum required window size in logical units
+// - margin: minimum distance from work area edges in logical units
 //
-// Returns a Rect with the calculated window position and size in logical coordinates.
-func InitialPlacement(minWidth, minHeight, desiredWidth, desiredHeight, margin int) Rect {
+// Returns width and height in screen units.
+func CalcPlacementSize(m *Monitor, desiredWidth, desiredHeight, minWidth, minHeight, margin int) (width, height int) {
+	if m == nil {
+		// Convert logical units to screen units assuming 1:1 scale
+		width = max(minWidth, desiredWidth)
+		height = max(minHeight, desiredHeight)
+		return
+	}
+
+	// Convert input parameters to screen units
+	screenMinWidth := int(float64(minWidth) * m.Scale)
+	screenMinHeight := int(float64(minHeight) * m.Scale)
+	screenDesiredWidth := int(float64(desiredWidth) * m.Scale)
+	screenDesiredHeight := int(float64(desiredHeight) * m.Scale)
+	screenMargin := int(float64(margin) * m.Scale)
+
+	// First try to satisfy desired size with margins
+	availWidth := m.WorkArea.Right - m.WorkArea.Left - 2*screenMargin
+	availHeight := m.WorkArea.Bottom - m.WorkArea.Top - 2*screenMargin
+
+	// If minimum size exceeds available space with margins, allow using margin area
+	width = min(max(screenMinWidth, screenDesiredWidth), availWidth)
+	if width < screenMinWidth {
+		width = min(screenMinWidth, m.WorkArea.Right-m.WorkArea.Left)
+	}
+
+	height = min(max(screenMinHeight, screenDesiredHeight), availHeight)
+	if height < screenMinHeight {
+		height = min(screenMinHeight, m.WorkArea.Bottom-m.WorkArea.Top)
+	}
+
+	return
+}
+
+// InitialPlacement calculates the initial window placement centered on a primary
+// monitor. Window size is determined by logic implemented in CalcPlacementSize.
+//
+// Parameters:
+// - desiredWidth, desiredHeight: preferred window size in logical units
+// - minWidth, minHeight: minimum required window size in logical units
+// - margin: minimum distance from work area edges in logical units
+//
+// Returns a Rect with the calculated window position and size in screen units.
+func InitialPlacement(desiredWidth, desiredHeight, minWidth, minHeight, margin int) Rect {
 	monitors := GetMonitors()
 	if len(monitors) == 0 {
+		width, height := CalcPlacementSize(nil, desiredWidth, desiredHeight, minWidth, minHeight, margin)
 		return Rect{
 			Left:   0,
 			Top:    0,
-			Right:  max(minWidth, desiredWidth),
-			Bottom: max(minHeight, desiredHeight),
+			Right:  width,
+			Bottom: height,
 		}
 	}
 
-	// Find default monitor (containing 0,0 or largest)
-	var defaultMonitor Monitor
-	var maxArea int
+	// Find default mon (containing 0,0 or first available)
+	mon := FindPrimaryMonitor(monitors)
 
-	for _, m := range monitors {
-		// Check if monitor contains (0,0)
-		if m.LogicalBounds.Left <= 0 && m.LogicalBounds.Right > 0 &&
-			m.LogicalBounds.Top <= 0 && m.LogicalBounds.Bottom > 0 {
-			defaultMonitor = m
-			break
-		}
-
-		// Track largest monitor as fallback
-		area := getRectArea(m.LogicalBounds)
-		if area > maxArea {
-			maxArea = area
-			defaultMonitor = m
-		}
-	}
-
-	workArea := defaultMonitor.LogicalWorkArea
-	workWidth := getRectWidth(workArea)
-	workHeight := getRectHeight(workArea)
-
-	// First try to satisfy desired size with margins
-	availWidth := workWidth - 2*margin
-	availHeight := workHeight - 2*margin
-
-	// If minimum size exceeds available space with margins, allow using margin area
-	width := min(max(minWidth, desiredWidth), availWidth)
-	if width < minWidth {
-		width = min(minWidth, workWidth)
-	}
-
-	height := min(max(minHeight, desiredHeight), availHeight)
-	if height < minHeight {
-		height = min(minHeight, workHeight)
-	}
+	width, height := CalcPlacementSize(mon, desiredWidth, desiredHeight, minWidth, minHeight, margin)
 
 	// Center the window in work area
-	centerX := (workArea.Left + workArea.Right) / 2
-	centerY := (workArea.Top + workArea.Bottom) / 2
+	centerX := (mon.WorkArea.Left + mon.WorkArea.Right) / 2
+	centerY := (mon.WorkArea.Top + mon.WorkArea.Bottom) / 2
 
 	return Rect{
 		Left:   centerX - width/2,

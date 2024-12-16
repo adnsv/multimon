@@ -1,47 +1,44 @@
 package multimon
 
-// LogicalToPhysical converts logical coordinates to physical coordinates for a given monitor
-func LogicalToPhysical(m Monitor, logical Rect) Rect {
-	// Calculate the scaling factors
-	scaleX := float64(m.PhysicalBounds.Right-m.PhysicalBounds.Left) / float64(m.LogicalBounds.Right-m.LogicalBounds.Left)
-	scaleY := float64(m.PhysicalBounds.Bottom-m.PhysicalBounds.Top) / float64(m.LogicalBounds.Bottom-m.LogicalBounds.Top)
+// Point represents a point in 2D space
+type Point struct {
+	X, Y int
+}
 
-	// Apply scaling and offset
+// LogicalToScreenRect converts logical coordinates to screen units for a given monitor
+func LogicalToScreenRect(m Monitor, logical Rect) Rect {
+	// Convert from logical units to screen units by multiplying by scale factor
 	return Rect{
-		Left:   int(float64(logical.Left-m.LogicalBounds.Left)*scaleX) + m.PhysicalBounds.Left,
-		Top:    int(float64(logical.Top-m.LogicalBounds.Top)*scaleY) + m.PhysicalBounds.Top,
-		Right:  int(float64(logical.Right-m.LogicalBounds.Left)*scaleX) + m.PhysicalBounds.Left,
-		Bottom: int(float64(logical.Bottom-m.LogicalBounds.Top)*scaleY) + m.PhysicalBounds.Top,
+		Left:   int(float64(logical.Left) * m.Scale),
+		Top:    int(float64(logical.Top) * m.Scale),
+		Right:  int(float64(logical.Right) * m.Scale),
+		Bottom: int(float64(logical.Bottom) * m.Scale),
 	}
 }
 
-// PhysicalToLogical converts physical coordinates to logical coordinates for a given monitor
-func PhysicalToLogical(m Monitor, physical Rect) Rect {
-	// Calculate the scaling factors
-	scaleX := float64(m.LogicalBounds.Right-m.LogicalBounds.Left) / float64(m.PhysicalBounds.Right-m.PhysicalBounds.Left)
-	scaleY := float64(m.LogicalBounds.Bottom-m.LogicalBounds.Top) / float64(m.PhysicalBounds.Bottom-m.PhysicalBounds.Top)
-
-	// Apply scaling and offset
+// ScreenToLogicalRect converts screen coordinates to logical units for a given monitor
+func ScreenToLogicalRect(m Monitor, screen Rect) Rect {
+	// Convert from screen units to logical units by dividing by scale factor
 	return Rect{
-		Left:   int(float64(physical.Left-m.PhysicalBounds.Left)*scaleX) + m.LogicalBounds.Left,
-		Top:    int(float64(physical.Top-m.PhysicalBounds.Top)*scaleY) + m.LogicalBounds.Top,
-		Right:  int(float64(physical.Right-m.PhysicalBounds.Left)*scaleX) + m.LogicalBounds.Left,
-		Bottom: int(float64(physical.Bottom-m.PhysicalBounds.Top)*scaleY) + m.LogicalBounds.Top,
+		Left:   int(float64(screen.Left) / m.Scale),
+		Top:    int(float64(screen.Top) / m.Scale),
+		Right:  int(float64(screen.Right) / m.Scale),
+		Bottom: int(float64(screen.Bottom) / m.Scale),
 	}
 }
 
-// ContainsLogicalPoint checks if a logical point is within the monitor's logical bounds
-func ContainsLogicalPoint(m Monitor, x, y int) bool {
-	return x >= m.LogicalBounds.Left &&
-		x < m.LogicalBounds.Right &&
-		y >= m.LogicalBounds.Top &&
-		y < m.LogicalBounds.Bottom
+// LogicalToScreenPoint converts a logical point to screen coordinates for a given monitor
+func LogicalToScreenPoint(m Monitor, x, y int) Point {
+	return Point{
+		X: int(float64(x) * m.Scale),
+		Y: int(float64(y) * m.Scale),
+	}
 }
 
-// ContainsPhysicalPoint checks if a physical point is within the monitor's physical bounds
-func ContainsPhysicalPoint(m Monitor, x, y int) bool {
-	return x >= m.PhysicalBounds.Left &&
-		x < m.PhysicalBounds.Right &&
-		y >= m.PhysicalBounds.Top &&
-		y < m.PhysicalBounds.Bottom
+// ScreenToLogicalPoint converts a screen point to logical coordinates for a given monitor
+func ScreenToLogicalPoint(m Monitor, x, y int) Point {
+	return Point{
+		X: int(float64(x) / m.Scale),
+		Y: int(float64(y) / m.Scale),
+	}
 }

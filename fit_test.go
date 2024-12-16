@@ -1,437 +1,479 @@
 package multimon
 
 import (
-	"errors"
+	"strings"
 	"testing"
 )
 
-func TestFitToMonitor_InputValidation(t *testing.T) {
-	monitor := Monitor{
-		LogicalBounds: Rect{
-			Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-		},
-		LogicalWorkArea: Rect{
-			Left: 0, Top: 40, Right: 1920, Bottom: 1040,
-		},
-	}
-
-	invalidMonitor := Monitor{
-		LogicalBounds: Rect{
-			Left: 0, Top: 0, Right: -1920, Bottom: 1080,
-		},
-		LogicalWorkArea: Rect{
-			Left: 0, Top: 40, Right: -1920, Bottom: 1040,
-		},
+func TestFitToMonitor(t *testing.T) {
+	monitor := &Monitor{
+		Bounds:   Rect{0, 0, 1920, 1080},
+		WorkArea: Rect{0, 40, 1920, 1040},
+		Scale:    1.5,
 	}
 
 	tests := []struct {
-		name      string
-		monitor   Monitor
-		window    Rect
-		wantError bool
+		name        string
+		monitor     *Monitor
+		mode        FitMode
+		window      Rect
+		scale       float64
+		want        Rect
+		wantScale   float64
+		wantErr     bool
+		errContains string
 	}{
+		// Basic fitting tests
 		{
-			name:      "window with negative width",
+			name:      "window in screen units",
 			monitor:   monitor,
-			window:    Rect{Left: 500, Top: 100, Right: 100, Bottom: 400},
-			wantError: true,
+			mode:      FitModeBounds,
+			window:    Rect{100, 100, 300, 300},
+			scale:     0.0,
+			want:      Rect{100, 100, 300, 300},
+			wantScale: 1.5,
 		},
 		{
-			name:      "window with negative height",
-			monitor:   monitor,
-			window:    Rect{Left: 100, Top: 500, Right: 400, Bottom: 100},
-			wantError: true,
-		},
-		{
-			name:      "monitor with negative width",
-			monitor:   invalidMonitor,
-			window:    Rect{Left: 100, Top: 100, Right: 400, Bottom: 400},
-			wantError: true,
-		},
-		{
-			name:    "valid dimensions",
+			name:    "window with custom scale 1.25",
 			monitor: monitor,
-			window:  Rect{Left: 100, Top: 100, Right: 400, Bottom: 400},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := FitToMonitor(tt.monitor, FitModeBounds, tt.window)
-			if tt.wantError {
-				if err == nil {
-					t.Error("FitToMonitor() error = nil, want error")
-				}
-				if !errors.Is(err, ErrInvalidDimensions) {
-					t.Errorf("FitToMonitor() error = %v, want %v", err, ErrInvalidDimensions)
-				}
-				return
-			}
-			if err != nil {
-				t.Errorf("FitToMonitor() unexpected error = %v", err)
-			}
-		})
-	}
-}
-
-func TestFitToMonitor_BasicFitting(t *testing.T) {
-	monitor := Monitor{
-		LogicalBounds: Rect{
-			Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-		},
-		LogicalWorkArea: Rect{
-			Left: 0, Top: 40, Right: 1920, Bottom: 1040,
-		},
-	}
-
-	tests := []struct {
-		name   string
-		mode   FitMode
-		window Rect
-		want   Rect
-	}{
-		{
-			name:   "window fits within bounds",
-			mode:   FitModeBounds,
-			window: Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-			want:   Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-		},
-		{
-			name:   "window outside right edge",
-			mode:   FitModeBounds,
-			window: Rect{Left: 1720, Top: 100, Right: 2120, Bottom: 400},
-			want:   Rect{Left: 1520, Top: 100, Right: 1920, Bottom: 400},
-		},
-		{
-			name:   "window outside bottom edge of work area",
-			mode:   FitModeWorkArea,
-			window: Rect{Left: 100, Top: 900, Right: 500, Bottom: 1200},
-			want:   Rect{Left: 100, Top: 740, Right: 500, Bottom: 1040},
-		},
-		{
-			name:   "window too large for bounds",
-			mode:   FitModeBounds,
-			window: Rect{Left: -100, Top: -100, Right: 2020, Bottom: 1180},
-			want:   Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080},
-		},
-		{
-			name:   "window too large for work area",
-			mode:   FitModeWorkArea,
-			window: Rect{Left: -100, Top: -100, Right: 2020, Bottom: 1180},
-			want:   Rect{Left: 0, Top: 40, Right: 1920, Bottom: 1040},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := FitToMonitor(monitor, tt.mode, tt.window)
-			if err != nil {
-				t.Errorf("FitToMonitor() error = %v", err)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("FitToMonitor() = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFitToNearestMonitor_OverlapBased(t *testing.T) {
-	monitors := []Monitor{
-		{
-			// First monitor: 1920x1080
-			LogicalBounds: Rect{
-				Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-			},
-			LogicalWorkArea: Rect{
-				Left: 0, Top: 40, Right: 1920, Bottom: 1040,
-			},
-		},
-		{
-			// Second monitor: 1920x1080, to the right
-			LogicalBounds: Rect{
-				Left: 1920, Top: 0, Right: 3840, Bottom: 1080,
-			},
-			LogicalWorkArea: Rect{
-				Left: 1920, Top: 40, Right: 3840, Bottom: 1040,
-			},
-		},
-	}
-
-	tests := []struct {
-		name   string
-		window Rect
-		want   Rect
-	}{
-		{
-			name:   "window fully within first monitor",
-			window: Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-			want:   Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-		},
-		{
-			name:   "window overlaps more with second monitor",
-			window: Rect{Left: 1800, Top: 100, Right: 2200, Bottom: 400},
-			want:   Rect{Left: 1920, Top: 100, Right: 2320, Bottom: 400},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := FitToNearestMonitor(monitors, FitModeBounds, tt.window, 0, 0)
-			if err != nil {
-				t.Errorf("FitToNearestMonitor() error = %v", err)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("FitToNearestMonitor() = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFitToNearestMonitor_MinimumSize(t *testing.T) {
-	monitors := []Monitor{
-		{
-			// First monitor: 1920x1080
-			LogicalBounds: Rect{
-				Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-			},
-			LogicalWorkArea: Rect{
-				Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-			},
-		},
-		{
-			// Second monitor: 2560x1440
-			LogicalBounds: Rect{
-				Left: 1920, Top: 0, Right: 4480, Bottom: 1440,
-			},
-			LogicalWorkArea: Rect{
-				Left: 1920, Top: 0, Right: 4480, Bottom: 1440,
-			},
-		},
-	}
-
-	tests := []struct {
-		name      string
-		window    Rect
-		minWidth  int
-		minHeight int
-		want      Rect
-	}{
-		{
-			name:      "window fits min size on current monitor",
-			window:    Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-			minWidth:  800,
-			minHeight: 600,
-			want:      Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-		},
-		{
-			name:      "window needs larger monitor for min size",
-			window:    Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-			minWidth:  2000,
-			minHeight: 1200,
-			want:      Rect{Left: 1920, Top: 0, Right: 4480, Bottom: 1440},
-		},
-		{
-			name:      "no monitor can fit min size, use largest",
-			window:    Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-			minWidth:  3000,
-			minHeight: 2000,
-			want:      Rect{Left: 1920, Top: 0, Right: 4480, Bottom: 1440},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := FitToNearestMonitor(monitors, FitModeBounds, tt.window, tt.minWidth, tt.minHeight)
-			if err != nil {
-				t.Errorf("FitToNearestMonitor() error = %v", err)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("FitToNearestMonitor() = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFitToNearestMonitor_EdgeDistance(t *testing.T) {
-	monitors := []Monitor{
-		{
-			// First monitor: 1920x1080
-			LogicalBounds: Rect{
-				Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-			},
-			LogicalWorkArea: Rect{
-				Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-			},
-		},
-		{
-			// Second monitor: 1920x1080, to the right
-			LogicalBounds: Rect{
-				Left: 1920, Top: 0, Right: 3840, Bottom: 1080,
-			},
-			LogicalWorkArea: Rect{
-				Left: 1920, Top: 0, Right: 3840, Bottom: 1080,
-			},
-		},
-		{
-			// Third monitor: 1920x1080, below
-			LogicalBounds: Rect{
-				Left: 0, Top: 1080, Right: 1920, Bottom: 2160,
-			},
-			LogicalWorkArea: Rect{
-				Left: 0, Top: 1080, Right: 1920, Bottom: 2160,
-			},
-		},
-	}
-
-	tests := []struct {
-		name   string
-		window Rect
-		want   Rect
-	}{
-		{
-			name:   "window closer to first monitor",
-			window: Rect{Left: -200, Top: 100, Right: 100, Bottom: 400},
-			want:   Rect{Left: 0, Top: 100, Right: 300, Bottom: 400},
-		},
-		{
-			name:   "window closer to second monitor",
-			window: Rect{Left: 2000, Top: 100, Right: 2300, Bottom: 400},
-			want:   Rect{Left: 2000, Top: 100, Right: 2300, Bottom: 400},
-		},
-		{
-			name:   "window closer to third monitor",
-			window: Rect{Left: 100, Top: 1000, Right: 400, Bottom: 1300},
-			want:   Rect{Left: 100, Top: 1080, Right: 400, Bottom: 1380},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := FitToNearestMonitor(monitors, FitModeBounds, tt.window, 0, 0)
-			if err != nil {
-				t.Errorf("FitToNearestMonitor() error = %v", err)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("FitToNearestMonitor() = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFitToNearestMonitor_EdgeCases(t *testing.T) {
-	monitors := []Monitor{
-		{
-			// First monitor: 1920x1080
-			LogicalBounds: Rect{
-				Left: 0, Top: 0, Right: 1920, Bottom: 1080,
-			},
-			LogicalWorkArea: Rect{
-				Left: 0, Top: 40, Right: 1920, Bottom: 1040,
-			},
-		},
-		{
-			// Second monitor: 2560x1440, to the right
-			LogicalBounds: Rect{
-				Left: 1920, Top: 0, Right: 4480, Bottom: 1440,
-			},
-			LogicalWorkArea: Rect{
-				Left: 1920, Top: 40, Right: 4480, Bottom: 1400,
-			},
-		},
-	}
-
-	tests := []struct {
-		name      string
-		window    Rect
-		mode      FitMode
-		minWidth  int
-		minHeight int
-		want      Rect
-		wantErr   error
-	}{
-		{
-			name:    "zero-size window",
-			window:  Rect{Left: 100, Top: 100, Right: 100, Bottom: 100},
 			mode:    FitModeBounds,
-			want:    Rect{Left: 100, Top: 100, Right: 100, Bottom: 100},
-			wantErr: ErrInvalidDimensions,
+
+			window:    Rect{100, 100, 300, 300},
+			scale:     1.25,
+			want:      Rect{120, 120, 360, 360},
+			wantScale: 1.5,
 		},
 		{
-			name:    "negative-size window",
-			window:  Rect{Left: 200, Top: 200, Right: 100, Bottom: 100},
-			mode:    FitModeBounds,
-			want:    Rect{Left: 200, Top: 200, Right: 100, Bottom: 100},
-			wantErr: ErrInvalidDimensions,
-		},
-		{
-			name:      "minimum size larger than any monitor",
-			window:    Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
+			name:      "window with custom scale 2.0",
+			monitor:   monitor,
 			mode:      FitModeBounds,
-			minWidth:  3000,
-			minHeight: 2000,
-			want:      Rect{Left: 1920, Top: 0, Right: 4480, Bottom: 1440}, // Should return largest monitor
+			window:    Rect{100, 100, 300, 300},
+			scale:     2.0,
+			want:      Rect{75, 75, 225, 225},
+			wantScale: 1.5,
 		},
+
+		// Mode tests
 		{
-			name:      "minimum size exactly matches monitor",
-			window:    Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
-			mode:      FitModeBounds,
-			minWidth:  1920,
-			minHeight: 1080,
-			want:      Rect{Left: 100, Top: 100, Right: 500, Bottom: 400}, // Should keep original position
-		},
-		{
-			name:   "window spans monitor boundary exactly",
-			window: Rect{Left: 1919, Top: 100, Right: 1920, Bottom: 400},
-			mode:   FitModeBounds,
-			want:   Rect{Left: 1919, Top: 100, Right: 1920, Bottom: 400},
-		},
-		{
-			name:   "window entirely outside all monitors",
-			window: Rect{Left: 5000, Top: 5000, Right: 5500, Bottom: 5500},
-			mode:   FitModeBounds,
-			want:   Rect{Left: 1920, Top: 0, Right: 2420, Bottom: 500}, // Should move to nearest monitor
-		},
-		{
-			name:   "work area mode with taskbar",
-			window: Rect{Left: 100, Top: 0, Right: 500, Bottom: 100},
-			mode:   FitModeWorkArea,
-			want:   Rect{Left: 100, Top: 40, Right: 500, Bottom: 140}, // Should adjust for taskbar
-		},
-		{
-			name:   "window larger than work area but smaller than bounds",
-			window: Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080},
-			mode:   FitModeWorkArea,
-			want:   Rect{Left: 0, Top: 40, Right: 1920, Bottom: 1040}, // Should fit to work area
-		},
-		{
-			name:      "minimum size fits work area but not taskbar area",
-			window:    Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
+			name:      "fit to work area",
+			monitor:   monitor,
 			mode:      FitModeWorkArea,
-			minWidth:  1920,
-			minHeight: 1000, // Just fits in work area (1040-40=1000)
-			want:      Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
+			window:    Rect{100, 20, 300, 300},
+			scale:     0.0,
+			want:      Rect{100, 40, 300, 320},
+			wantScale: 1.5,
+		},
+
+		// Boundary tests
+		{
+			name:      "window too large",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{100, 100, 2100, 1200},
+			scale:     0.0,
+			want:      Rect{0, 0, 1920, 1080},
+			wantScale: 1.5,
+		},
+		{
+			name:      "window outside bounds left",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{-100, 100, 100, 300},
+			scale:     0.0,
+			want:      Rect{0, 100, 200, 300},
+			wantScale: 1.5,
+		},
+		{
+			name:      "window outside bounds right",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{1900, 100, 2100, 300},
+			scale:     0.0,
+			want:      Rect{1720, 100, 1920, 300},
+			wantScale: 1.5,
+		},
+		{
+			name:      "window outside bounds top",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{100, -100, 300, 100},
+			scale:     0.0,
+			want:      Rect{100, 0, 300, 200},
+			wantScale: 1.5,
+		},
+		{
+			name:      "window outside bounds bottom",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{100, 1000, 300, 1200},
+			scale:     0.0,
+			want:      Rect{100, 880, 300, 1080},
+			wantScale: 1.5,
+		},
+		{
+			name:      "window outside bounds all sides",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{-100, -100, 2100, 1200},
+			scale:     0.0,
+			want:      Rect{0, 0, 1920, 1080},
+			wantScale: 1.5,
+		},
+
+		// Scale edge cases
+		{
+			name:      "large window with 2x scale",
+			monitor:   monitor,
+			mode:      FitModeBounds,
+			window:    Rect{0, 0, 2000, 2000},
+			scale:     2.0,
+			want:      Rect{0, 0, 1500, 1080}, // First scaled (2000 * 1.5/2.0 = 1500), then height clamped to 1080
+			wantScale: 1.5,
+		},
+
+		// Work area edge cases
+		{
+			name: "work area equals bounds",
+			monitor: &Monitor{
+				Bounds:   Rect{0, 0, 1920, 1080},
+				WorkArea: Rect{0, 0, 1920, 1080},
+				Scale:    1.5,
+			},
+			mode:      FitModeWorkArea,
+			window:    Rect{100, 100, 300, 300},
+			scale:     0.0,
+			want:      Rect{100, 100, 300, 300},
+			wantScale: 1.5,
+		},
+		{
+			name: "small work area",
+			monitor: &Monitor{
+				Bounds:   Rect{0, 0, 1920, 1080},
+				WorkArea: Rect{100, 100, 200, 200},
+				Scale:    1.5,
+			},
+			mode:      FitModeWorkArea,
+			window:    Rect{0, 0, 200, 200},
+			scale:     0.0,
+			want:      Rect{100, 100, 200, 200},
+			wantScale: 1.5,
+		},
+
+		// Error cases
+		{
+			name:        "nil monitor with zero scale",
+			monitor:     nil,
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       0.0,
+			want:        Rect{100, 100, 300, 300},
+			wantScale:   1.0,
+			wantErr:     true,
+			errContains: "nil",
+		},
+		{
+			name:        "nil monitor with custom scale",
+			monitor:     nil,
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       1.25,
+			want:        Rect{100, 100, 300, 300},
+			wantScale:   1.25,
+			wantErr:     true,
+			errContains: "nil",
+		},
+		{
+			name:        "invalid window dimensions",
+			monitor:     monitor,
+			mode:        FitModeBounds,
+			window:      Rect{300, 300, 100, 100},
+			scale:       0.0,
+			wantErr:     true,
+			errContains: "invalid dimensions",
+		},
+		{
+			name: "invalid monitor scale",
+			monitor: &Monitor{
+				Bounds:   Rect{0, 0, 1920, 1080},
+				WorkArea: Rect{0, 40, 1920, 1040},
+				Scale:    0.0,
+			},
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       0.0,
+			wantErr:     true,
+			errContains: "invalid scale",
+		},
+		{
+			name: "invalid monitor bounds",
+			monitor: &Monitor{
+				Bounds:   Rect{100, 0, 0, 1080},
+				WorkArea: Rect{0, 40, 1920, 1040},
+				Scale:    1.5,
+			},
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       0.0,
+			wantErr:     true,
+			errContains: "invalid bounds",
+		},
+		{
+			name: "invalid monitor work area",
+			monitor: &Monitor{
+				Bounds:   Rect{0, 0, 1920, 1080},
+				WorkArea: Rect{0, 1040, 1920, 40},
+				Scale:    1.5,
+			},
+			mode:        FitModeWorkArea,
+			window:      Rect{100, 100, 300, 300},
+			scale:       0.0,
+			wantErr:     true,
+			errContains: "invalid work area",
+		},
+		{
+			name: "work area outside bounds",
+			monitor: &Monitor{
+				Bounds:   Rect{0, 0, 1920, 1080},
+				WorkArea: Rect{-100, -100, 2000, 2000},
+				Scale:    1.5,
+			},
+			mode:        FitModeWorkArea,
+			window:      Rect{100, 100, 300, 300},
+			scale:       0.0,
+			wantErr:     true,
+			errContains: "work area outside bounds",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := FitToNearestMonitor(monitors, tt.mode, tt.window, tt.minWidth, tt.minHeight)
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("FitToNearestMonitor() error = %v, wantErr %v", err, tt.wantErr)
+			got, gotScale, err := FitToMonitor(tt.monitor, tt.mode, tt.window, tt.scale)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got none")
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("FitToNearestMonitor() unexpected error = %v", err)
+				t.Errorf("unexpected error: %v", err)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("FitToNearestMonitor() = %+v, want %+v", got, tt.want)
+				t.Errorf("got rect %v, want %v", got, tt.want)
+			}
+			if gotScale != tt.wantScale {
+				t.Errorf("got scale %v, want %v", gotScale, tt.wantScale)
+			}
+		})
+	}
+}
+
+func TestFitToNearestMonitor(t *testing.T) {
+	// Common test monitors
+	monitors := []Monitor{
+		{
+			// Primary monitor: 1920x1080, taskbar at bottom
+			Bounds:   Rect{0, 0, 1920, 1080},
+			WorkArea: Rect{0, 0, 1920, 1040},
+			Scale:    1.0,
+		},
+		{
+			// Secondary monitor: 1920x1080, taskbar at top
+			Bounds:   Rect{1920, 0, 3840, 1080},
+			WorkArea: Rect{1920, 40, 3840, 1080},
+			Scale:    1.5,
+		},
+		{
+			// Small monitor: 1280x720, no taskbar
+			Bounds:   Rect{0, 1080, 1280, 1800},
+			WorkArea: Rect{0, 1080, 1280, 1800},
+			Scale:    1.25,
+		},
+	}
+
+	tests := []struct {
+		name        string
+		monitors    []Monitor
+		mode        FitMode
+		window      Rect
+		scale       float64
+		minWidth    int
+		minHeight   int
+		want        Rect
+		wantScale   float64
+		wantErr     bool
+		errContains string
+	}{
+		// Monitor filtering tests
+		{
+			name:        "no monitors with zero scale",
+			monitors:    nil,
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       0.0,
+			want:        Rect{100, 100, 300, 300},
+			wantScale:   1.0, // default to 1.0 when no monitors and zero scale
+			wantErr:     true,
+			errContains: "no monitors available",
+		},
+		{
+			name:        "no monitors with custom scale",
+			monitors:    nil,
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       1.25,
+			want:        Rect{100, 100, 300, 300},
+			wantScale:   1.25, // use provided scale when no monitors
+			wantErr:     true,
+			errContains: "no monitors available",
+		},
+		{
+			name: "all monitors invalid with zero scale",
+			monitors: []Monitor{
+				{Bounds: Rect{0, 0, -100, 100}, Scale: 1.0},
+				{Bounds: Rect{0, 0, 100, -100}, Scale: 1.0},
+			},
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       0.0,
+			want:        Rect{100, 100, 300, 300},
+			wantScale:   1.0, // default to 1.0 when no valid monitors and zero scale
+			wantErr:     true,
+			errContains: "no valid monitors found",
+		},
+		{
+			name: "all monitors invalid with custom scale",
+			monitors: []Monitor{
+				{Bounds: Rect{0, 0, -100, 100}, Scale: 1.0},
+				{Bounds: Rect{0, 0, 100, -100}, Scale: 1.0},
+			},
+			mode:        FitModeBounds,
+			window:      Rect{100, 100, 300, 300},
+			scale:       1.25,
+			want:        Rect{100, 100, 300, 300},
+			wantScale:   1.25, // use provided scale when no valid monitors
+			wantErr:     true,
+			errContains: "no valid monitors found",
+		},
+
+		// Minimum size tests
+		{
+			name:      "fits work area minimum size",
+			monitors:  monitors,
+			mode:      FitModeWorkArea,
+			window:    Rect{100, 100, 300, 300},
+			scale:     0.0,
+			minWidth:  1000,
+			minHeight: 900,
+			want:      Rect{100, 100, 300, 300},
+			wantScale: 1.0, // primary monitor's scale
+		},
+		{
+			name:      "fits bounds but not work area",
+			monitors:  monitors,
+			mode:      FitModeWorkArea,
+			window:    Rect{100, 100, 300, 300},
+			scale:     0.0,
+			minWidth:  1000,
+			minHeight: 1000,
+			want:      Rect{100, 100, 300, 300},
+			wantScale: 1.0, // primary monitor's scale
+		},
+		{
+			name:      "ignores minimum size if no monitor fits",
+			monitors:  monitors,
+			mode:      FitModeBounds,
+			window:    Rect{100, 1080, 300, 1280},
+			scale:     0.0,
+			minWidth:  2000,
+			minHeight: 2000,
+			want:      Rect{100, 1080, 300, 1280},
+			wantScale: 1.25, // small monitor's scale
+		},
+
+		// Overlap tests
+		{
+			name:      "window fully inside primary monitor",
+			monitors:  monitors,
+			mode:      FitModeBounds,
+			window:    Rect{100, 100, 300, 300},
+			scale:     0.0,
+			want:      Rect{100, 100, 300, 300},
+			wantScale: 1.0, // primary monitor's scale
+		},
+		{
+			name:      "window overlaps two monitors",
+			monitors:  monitors,
+			mode:      FitModeBounds,
+			window:    Rect{1800, 100, 2100, 300},
+			scale:     0.0,
+			want:      Rect{1920, 100, 2220, 300}, // Window moved to fit within monitor bounds
+			wantScale: 1.5,                        // secondary monitor's scale (more overlap in screen units)
+		},
+		{
+			name:      "window mostly in secondary monitor",
+			monitors:  monitors,
+			mode:      FitModeBounds,
+			window:    Rect{1900, 100, 2100, 300},
+			scale:     0.0,
+			want:      Rect{1920, 100, 2120, 300}, // Window moved to fit within monitor bounds
+			wantScale: 1.5,                        // secondary monitor's scale
+		},
+
+		// Distance tests
+		{
+			name:      "window outside all monitors",
+			monitors:  monitors,
+			mode:      FitModeBounds,
+			window:    Rect{4000, 100, 4200, 300},
+			scale:     0.0,
+			want:      Rect{3640, 100, 3840, 300},
+			wantScale: 1.5, // secondary monitor's scale (nearest)
+		},
+		{
+			name:      "window closest to small monitor",
+			monitors:  monitors,
+			mode:      FitModeBounds,
+			window:    Rect{100, 1900, 300, 2100},
+			scale:     0.0,
+			want:      Rect{100, 1600, 300, 1800},
+			wantScale: 1.25, // small monitor's scale
+		},
+
+		// Scale tests
+		{
+			name:      "window with custom scale",
+			monitors:  monitors,
+			mode:      FitModeBounds,
+			window:    Rect{100, 100, 300, 300},
+			scale:     2.0,
+			want:      Rect{50, 50, 150, 150},
+			wantScale: 1.0, // primary monitor's scale
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotScale, err := FitToNearestMonitor(tt.monitors, tt.mode, tt.window, tt.scale, tt.minWidth, tt.minHeight)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got none")
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("got rect %v, want %v", got, tt.want)
+			}
+			if gotScale != tt.wantScale {
+				t.Errorf("got scale %v, want %v", gotScale, tt.wantScale)
 			}
 		})
 	}

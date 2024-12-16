@@ -3,6 +3,7 @@ package multimon
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
 // ErrNoMonitors is returned when no monitors are available for fitting
@@ -21,106 +22,109 @@ const (
 	FitModeWorkArea
 )
 
-// validateRect checks if a rectangle has valid dimensions
-func validateRect(r Rect) error {
-	if r.Right-r.Left <= 0 || r.Bottom-r.Top <= 0 {
-		return fmt.Errorf("%w: width=%d, height=%d", ErrInvalidDimensions, r.Right-r.Left, r.Bottom-r.Top)
-	}
-	return nil
-}
-
-// validateMonitor checks if a monitor has valid dimensions
-func validateMonitor(m Monitor) error {
-	if err := validateRect(m.LogicalBounds); err != nil {
-		return fmt.Errorf("invalid logical bounds: %w", err)
-	}
-	if err := validateRect(m.LogicalWorkArea); err != nil {
-		return fmt.Errorf("invalid logical work area: %w", err)
-	}
-	return nil
-}
-
 // FitToMonitor fits a window to a specific monitor.
-// All coordinates are in logical space.
+// Input window coordinates are in screen units.
+// windowScale specifies what scale factor the window was designed for:
+// - If 0.0: keep window as is, no rescaling needed
+// - If > 0.0: rescale window from windowScale to monitor's scale
 // Returns error if window or monitor has negative dimensions.
-func FitToMonitor(m Monitor, mode FitMode, window Rect) (Rect, error) {
+// Returns the fitted rect and the monitor's scale factor.
+// If monitor is nil, returns windowScale if non-zero, otherwise 1.0.
+func FitToMonitor(m *Monitor, mode FitMode, window Rect, windowScale float64) (Rect, float64, error) {
 	// Validate input dimensions
 	if err := validateRect(window); err != nil {
-		return window, fmt.Errorf("invalid window: %w", err)
+		return window, windowScale, fmt.Errorf("invalid window: %w", err)
 	}
-	if err := validateMonitor(m); err != nil {
-		return window, err
+	if m == nil {
+		// When no monitor is available, use windowScale if non-zero, otherwise 1.0
+		outputScale := 1.0
+		if windowScale > 0.0 {
+			outputScale = windowScale
+		}
+		return window, outputScale, fmt.Errorf("invalid monitor: nil")
+	}
+	if err := validateMonitor(*m); err != nil {
+		return window, windowScale, err
 	}
 
 	// Get target bounds based on mode
-	bounds := m.LogicalBounds
+	bounds := m.Bounds
 	if mode == FitModeWorkArea {
-		bounds = m.LogicalWorkArea
+		bounds = m.WorkArea
 	}
 
-	// Calculate window dimensions
-	width := window.Right - window.Left
-	height := window.Bottom - window.Top
-
-	// If window fits within bounds, just reposition if needed
-	if width <= (bounds.Right-bounds.Left) && height <= (bounds.Bottom-bounds.Top) {
-		newLeft := window.Left
-		newTop := window.Top
-
-		// If window is completely outside, position it relative to the monitor's edge
-		if window.Left > bounds.Right || window.Right < bounds.Left ||
-			window.Top > bounds.Bottom || window.Bottom < bounds.Top {
-			newLeft = bounds.Left
-			newTop = bounds.Top
-		} else {
-			// Normal positioning logic for partially overlapping windows
-			if window.Right > bounds.Right {
-				newLeft = bounds.Right - width
-			}
-			if newLeft < bounds.Left {
-				newLeft = bounds.Left
-			}
-			if window.Bottom > bounds.Bottom {
-				newTop = bounds.Bottom - height
-			}
-			if newTop < bounds.Top {
-				newTop = bounds.Top
-			}
-		}
-
-		return Rect{
-			Left:   newLeft,
-			Top:    newTop,
-			Right:  newLeft + width,
-			Bottom: newTop + height,
-		}, nil
+	// Scale window if needed
+	var targetWindow Rect
+	if windowScale == 0.0 {
+		targetWindow = window
+	} else {
+		// Adjust window size based on scale difference
+		targetWindow = scaleRect(window, m.Scale/windowScale)
 	}
 
-	// Window needs to be resized
-	newWidth := min(width, bounds.Right-bounds.Left)
-	newHeight := min(height, bounds.Bottom-bounds.Top)
-	newLeft := max(bounds.Left, min(window.Left, bounds.Right-newWidth))
-	newTop := max(bounds.Top, min(window.Top, bounds.Bottom-newHeight))
+	// Fit dimensions and positions within bounds
+	newLeft, newWidth := fitRectDimension(targetWindow.Left, targetWindow.Right-targetWindow.Left, bounds.Left, bounds.Right)
+	newTop, newHeight := fitRectDimension(targetWindow.Top, targetWindow.Bottom-targetWindow.Top, bounds.Top, bounds.Bottom)
 
 	return Rect{
 		Left:   newLeft,
 		Top:    newTop,
 		Right:  newLeft + newWidth,
 		Bottom: newTop + newHeight,
-	}, nil
+	}, m.Scale, nil
+}
+
+// validateRect checks if a rectangle has valid dimensions
+func validateRect(r Rect) error {
+	width := r.Right - r.Left
+	height := r.Bottom - r.Top
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("%w: width=%d, height=%d", ErrInvalidDimensions, width, height)
+	}
+	return nil
+}
+
+// validateMonitor checks if a monitor has valid dimensions
+func validateMonitor(m Monitor) error {
+	if err := validateRect(m.Bounds); err != nil {
+		return fmt.Errorf("invalid bounds: %w", err)
+	}
+	if err := validateRect(m.WorkArea); err != nil {
+		return fmt.Errorf("invalid work area: %w", err)
+	}
+	if m.Scale <= 0.0 {
+		return fmt.Errorf("invalid scale: %v (must be positive non-zero)", m.Scale)
+	}
+	// Check that work area is contained within bounds
+	if m.WorkArea.Left < m.Bounds.Left || m.WorkArea.Right > m.Bounds.Right ||
+		m.WorkArea.Top < m.Bounds.Top || m.WorkArea.Bottom > m.Bounds.Bottom {
+		return fmt.Errorf("work area outside bounds: work_area=%v bounds=%v", m.WorkArea, m.Bounds)
+	}
+	return nil
 }
 
 // FitToNearestMonitor finds the most appropriate monitor and fits the window to it.
-// If minWidth and minHeight are > 0, it will try to find a monitor that can fit these minimum dimensions.
-// Returns error if window has negative dimensions or if no valid monitors are available.
-func FitToNearestMonitor(monitors []Monitor, mode FitMode, window Rect, minWidth, minHeight int) (Rect, error) {
+// Input window coordinates are in screen units.
+// windowScale specifies what scale factor the window was designed for:
+// - If 0.0: keep window as is, no rescaling needed
+// - If > 0.0: rescale window from windowScale to monitor's scale
+// minWidth and minHeight specify the minimum dimensions the window should have (in logical units).
+// Returns error if window has negative dimensions, if no valid monitors are available,
+// or if no monitor can fit the minimum size requirements.
+// If no monitors are available, returns windowScale if non-zero, otherwise 1.0.
+func FitToNearestMonitor(monitors []Monitor, mode FitMode, window Rect, windowScale float64, minWidth, minHeight int) (Rect, float64, error) {
 	// Validate window dimensions
 	if err := validateRect(window); err != nil {
-		return window, fmt.Errorf("invalid window: %w", err)
+		return window, windowScale, fmt.Errorf("invalid window: %w", err)
 	}
 
 	if len(monitors) == 0 {
-		return window, ErrNoMonitors
+		// When no monitors are available, use windowScale if non-zero, otherwise 1.0
+		outputScale := 1.0
+		if windowScale > 0.0 {
+			outputScale = windowScale
+		}
+		return window, outputScale, ErrNoMonitors
 	}
 
 	// Filter out invalid monitors
@@ -132,127 +136,83 @@ func FitToNearestMonitor(monitors []Monitor, mode FitMode, window Rect, minWidth
 	}
 
 	if len(validMonitors) == 0 {
-		return window, fmt.Errorf("%w: no valid monitors found", ErrNoMonitors)
-	}
-
-	type monitorScore struct {
-		monitor Monitor
-		overlap int
-		dist    int
-		canFit  bool
-	}
-
-	var candidates []monitorScore
-	maxOverlap := 0
-
-	// First pass: calculate overlap areas and check minimum size requirements
-	for _, m := range validMonitors {
-		bounds := m.LogicalBounds
-		if mode == FitModeWorkArea {
-			bounds = m.LogicalWorkArea
+		// When no valid monitors are available, use windowScale if non-zero, otherwise 1.0
+		outputScale := 1.0
+		if windowScale > 0.0 {
+			outputScale = windowScale
 		}
+		return window, outputScale, fmt.Errorf("%w: no valid monitors found", ErrNoMonitors)
+	}
 
-		// Check if monitor can fit minimum dimensions
-		canFit := true
-		if minWidth > 0 && minHeight > 0 {
+	// Collect monitors that can fit minimum size with fallback to remaining monitors
+	var suitableMonitors []Monitor
+	if minWidth <= 0 || minHeight <= 0 {
+		suitableMonitors = validMonitors
+	} else {
+		for _, m := range validMonitors {
+			bounds := m.Bounds
+			if mode == FitModeWorkArea {
+				bounds = m.WorkArea
+			}
+
+			// Check if monitor can fit minimum dimensions
+			screenMinWidth := int(float64(minWidth) * m.Scale)
+			screenMinHeight := int(float64(minHeight) * m.Scale)
 			width := bounds.Right - bounds.Left
 			height := bounds.Bottom - bounds.Top
-			if width < minWidth || height < minHeight {
-				canFit = false
+
+			if width >= screenMinWidth && height >= screenMinHeight {
+				suitableMonitors = append(suitableMonitors, m)
 			}
 		}
+		if len(suitableMonitors) == 0 && mode == FitModeWorkArea {
+			// If nothing fits within work area, as fallback try to fit to total bounds
+			for _, m := range validMonitors {
+				// Check if monitor can fit minimum dimensions
+				screenMinWidth := int(float64(minWidth) * m.Scale)
+				screenMinHeight := int(float64(minHeight) * m.Scale)
+				width := m.Bounds.Right - m.Bounds.Left
+				height := m.Bounds.Bottom - m.Bounds.Top
+				if width >= screenMinWidth && height >= screenMinHeight {
+					suitableMonitors = append(suitableMonitors, m)
+				}
+			}
+		}
+		if len(suitableMonitors) == 0 {
+			// If nothing fits so far, try all the monitors, effectively
+			// ignoring minWidth and minHeight.
+			suitableMonitors = validMonitors
+		}
+	}
 
-		// Calculate overlap area
-		overlap := getOverlapArea(window, bounds)
+	// Find monitor with best overlap
+	var bestMonitor *Monitor
+	maxOverlap := 0
+	for i := range suitableMonitors {
+		m := &suitableMonitors[i]
+		overlap := getOverlapArea(window, m.Bounds)
 		if overlap > maxOverlap {
 			maxOverlap = overlap
+			bestMonitor = m
 		}
-
-		// Calculate edge distance (used when no overlap)
-		dist := getEdgeDistance(window, bounds)
-
-		candidates = append(candidates, monitorScore{m, overlap, dist, canFit})
 	}
 
-	// Sort candidates by overlap area (primary) and edge distance (secondary)
-	for i := 0; i < len(candidates)-1; i++ {
-		for j := i + 1; j < len(candidates); j++ {
-			shouldSwap := false
-
-			// If both have overlap, prefer larger overlap
-			if candidates[i].overlap > 0 && candidates[j].overlap > 0 {
-				shouldSwap = candidates[j].overlap > candidates[i].overlap
-			} else if candidates[i].overlap == 0 && candidates[j].overlap == 0 {
-				// If neither has overlap, prefer closer distance
-				shouldSwap = candidates[j].dist < candidates[i].dist
-			} else {
-				// Prefer any overlap over no overlap
-				shouldSwap = candidates[j].overlap > candidates[i].overlap
-			}
-
-			if shouldSwap {
-				candidates[i], candidates[j] = candidates[j], candidates[i]
+	// If nothing overlaps, use the nearest monitor
+	if bestMonitor == nil {
+		minDistance := math.MaxInt
+		for i := range suitableMonitors {
+			m := &suitableMonitors[i]
+			dist := getEdgeDistance(window, m.Bounds)
+			if dist < minDistance {
+				minDistance = dist
+				bestMonitor = m
 			}
 		}
 	}
 
-	// If we have minimum size requirements
-	if minWidth > 0 && minHeight > 0 {
-		// First try the monitor with the most overlap if it can fit minimum size
-		bestCandidate := candidates[0]
-		if bestCandidate.canFit {
-			fitted, err := FitToMonitor(bestCandidate.monitor, mode, window)
-			if err == nil {
-				return fitted, nil
-			}
-		}
-
-		// If best candidate can't fit, look for another monitor that can
-		for _, c := range candidates[1:] { // Start from second candidate
-			if c.canFit {
-				if mode == FitModeWorkArea {
-					return c.monitor.LogicalWorkArea, nil
-				}
-				return c.monitor.LogicalBounds, nil
-			}
-		}
-
-		// If no monitor can fit, use the largest one
-		largest := findLargestMonitor(validMonitors, mode)
-		if largest != nil {
-			if mode == FitModeWorkArea {
-				return largest.LogicalWorkArea, nil
-			}
-			return largest.LogicalBounds, nil
-		}
-		return window, fmt.Errorf("%w: no monitor can fit minimum size", ErrNoMonitors)
+	if bestMonitor == nil {
+		bestMonitor = &suitableMonitors[0]
 	}
 
-	// No minimum size requirements, use the best candidate
-	return FitToMonitor(candidates[0].monitor, mode, window)
-}
-
-// findLargestMonitor returns the monitor with the largest area
-func findLargestMonitor(monitors []Monitor, mode FitMode) *Monitor {
-	var maxArea int
-	var largest *Monitor
-
-	for i := range monitors {
-		m := &monitors[i]
-		if validateMonitor(*m) != nil {
-			continue
-		}
-
-		bounds := m.LogicalBounds
-		if mode == FitModeWorkArea {
-			bounds = m.LogicalWorkArea
-		}
-
-		area := (bounds.Right - bounds.Left) * (bounds.Bottom - bounds.Top)
-		if area > maxArea {
-			maxArea = area
-			largest = m
-		}
-	}
-	return largest
+	return FitToMonitor(bestMonitor, mode, window, windowScale)
 }

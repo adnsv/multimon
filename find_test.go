@@ -2,259 +2,241 @@ package multimon
 
 import "testing"
 
-func createTestMonitors() []Monitor {
-	return []Monitor{
-		{
-			LogicalBounds:  Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080},
-			PhysicalBounds: Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080},
-		},
-		{
-			LogicalBounds:  Rect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080},
-			PhysicalBounds: Rect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080},
-		},
-		{
-			LogicalBounds:  Rect{Left: 0, Top: 1080, Right: 1920, Bottom: 2160},
-			PhysicalBounds: Rect{Left: 0, Top: 1080, Right: 1920, Bottom: 2160},
-		},
-	}
-}
-
-func TestFindMonitorFromLogicalPoint(t *testing.T) {
-	monitors := createTestMonitors()
+func TestFindPrimaryMonitor(t *testing.T) {
 	tests := []struct {
-		name      string
-		x, y      int
-		wantIndex int // -1 means no monitor should be found
+		name     string
+		monitors []Monitor
+		want     *int // index in monitors array, nil for no monitor
 	}{
-		{name: "first monitor center", x: 960, y: 540, wantIndex: 0},
-		{name: "second monitor center", x: 2880, y: 540, wantIndex: 1},
-		{name: "third monitor center", x: 960, y: 1620, wantIndex: 2},
-		{name: "first monitor edge", x: 1919, y: 1079, wantIndex: 0},
-		{name: "second monitor edge", x: 1920, y: 0, wantIndex: 1},
-		{name: "outside all monitors", x: 4000, y: 4000, wantIndex: -1},
+		{
+			name:     "empty monitors",
+			monitors: []Monitor{},
+			want:     nil,
+		},
+		{
+			name: "single monitor at origin",
+			monitors: []Monitor{
+				{Bounds: Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080}},
+			},
+			want: intPtr(0),
+		},
+		{
+			name: "single monitor not at origin",
+			monitors: []Monitor{
+				{Bounds: Rect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080}},
+			},
+			want: intPtr(0), // first monitor when no monitor contains origin
+		},
+		{
+			name: "multiple monitors, one at origin",
+			monitors: []Monitor{
+				{Bounds: Rect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080}},
+				{Bounds: Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080}},
+			},
+			want: intPtr(1),
+		},
+		{
+			name: "multiple monitors, none at origin",
+			monitors: []Monitor{
+				{Bounds: Rect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080}},
+				{Bounds: Rect{Left: 3840, Top: 0, Right: 5760, Bottom: 1080}},
+			},
+			want: intPtr(0), // first monitor when no monitor contains origin
+		},
+		{
+			name: "monitor partially containing origin",
+			monitors: []Monitor{
+				{Bounds: Rect{Left: -100, Top: -100, Right: 1820, Bottom: 980}},
+			},
+			want: intPtr(0),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FindMonitorFromLogicalPoint(monitors, tt.x, tt.y)
-			if tt.wantIndex == -1 {
+			got := FindPrimaryMonitor(tt.monitors)
+			if tt.want == nil {
 				if got != nil {
-					t.Errorf("FindMonitorFromLogicalPoint(%d, %d) = %+v, want nil", tt.x, tt.y, got)
+					t.Errorf("FindPrimaryMonitor() = %v, want nil", got)
 				}
-			} else {
-				if got == nil {
-					t.Errorf("FindMonitorFromLogicalPoint(%d, %d) = nil, want monitor at index %d", tt.x, tt.y, tt.wantIndex)
-					return
-				}
-				if got != &monitors[tt.wantIndex] {
-					t.Errorf("FindMonitorFromLogicalPoint(%d, %d) got monitor at wrong index", tt.x, tt.y)
-				}
+			} else if got != &tt.monitors[*tt.want] {
+				t.Errorf("FindPrimaryMonitor() = %v, want monitor %d", got, *tt.want)
 			}
 		})
 	}
 }
 
-func TestFindMonitorFromPhysicalPoint(t *testing.T) {
-	monitors := createTestMonitors()
-	tests := []struct {
-		name      string
-		x, y      int
-		wantIndex int // -1 means no monitor should be found
-	}{
-		{name: "first monitor center", x: 960, y: 540, wantIndex: 0},
-		{name: "second monitor center", x: 2880, y: 540, wantIndex: 1},
-		{name: "third monitor center", x: 960, y: 1620, wantIndex: 2},
-		{name: "first monitor edge", x: 1919, y: 1079, wantIndex: 0},
-		{name: "second monitor edge", x: 1920, y: 0, wantIndex: 1},
-		{name: "outside all monitors", x: 4000, y: 4000, wantIndex: -1},
+func TestFindMonitorFromScreenRect(t *testing.T) {
+	baseMonitors := []Monitor{
+		{Bounds: Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080}},
+		{Bounds: Rect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080}},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FindMonitorFromPhysicalPoint(monitors, tt.x, tt.y)
-			if tt.wantIndex == -1 {
-				if got != nil {
-					t.Errorf("FindMonitorFromPhysicalPoint(%d, %d) = %+v, want nil", tt.x, tt.y, got)
-				}
-			} else {
-				if got == nil {
-					t.Errorf("FindMonitorFromPhysicalPoint(%d, %d) = nil, want monitor at index %d", tt.x, tt.y, tt.wantIndex)
-					return
-				}
-				if got != &monitors[tt.wantIndex] {
-					t.Errorf("FindMonitorFromPhysicalPoint(%d, %d) got monitor at wrong index", tt.x, tt.y)
-				}
-			}
-		})
-	}
-}
-
-func TestFindMonitorFromLogicalRect(t *testing.T) {
-	monitors := createTestMonitors()
 	tests := []struct {
 		name      string
+		monitors  []Monitor
 		rect      Rect
-		wantIndex int // -1 means no monitor should be found
+		defaultTo DefaultMonitorMode
+		want      *int // index in monitors array, nil for no monitor
 	}{
 		{
-			name:      "fully inside first monitor",
-			rect:      Rect{Left: 100, Top: 100, Right: 800, Bottom: 600},
-			wantIndex: 0,
+			name:      "empty monitors",
+			monitors:  []Monitor{},
+			rect:      Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
+			defaultTo: DefaultMonitorNull,
+			want:      nil,
 		},
 		{
-			name:      "spanning first and second monitors",
-			rect:      Rect{Left: 1800, Top: 100, Right: 2100, Bottom: 600},
-			wantIndex: 1, // should pick monitor with larger overlap (second monitor)
+			name:      "fully contained in first monitor",
+			monitors:  baseMonitors,
+			rect:      Rect{Left: 100, Top: 100, Right: 500, Bottom: 400},
+			defaultTo: DefaultMonitorNull,
+			want:      intPtr(0),
 		},
 		{
-			name:      "fully inside second monitor",
-			rect:      Rect{Left: 2000, Top: 100, Right: 3000, Bottom: 600},
-			wantIndex: 1,
+			name:      "fully contained in second monitor",
+			monitors:  baseMonitors,
+			rect:      Rect{Left: 2000, Top: 100, Right: 2500, Bottom: 400},
+			defaultTo: DefaultMonitorNull,
+			want:      intPtr(1),
 		},
 		{
-			name:      "spanning all monitors",
-			rect:      Rect{Left: 0, Top: 0, Right: 3840, Bottom: 2160},
-			wantIndex: 0, // should pick first monitor due to equal overlap
+			name:      "spanning both monitors, more in first",
+			monitors:  baseMonitors,
+			rect:      Rect{Left: 1820, Top: 100, Right: 2020, Bottom: 400},
+			defaultTo: DefaultMonitorNull,
+			want:      intPtr(0),
 		},
 		{
-			name:      "outside all monitors",
-			rect:      Rect{Left: 4000, Top: 4000, Right: 5000, Bottom: 5000},
-			wantIndex: -1,
+			name:      "spanning both monitors, more in second",
+			monitors:  baseMonitors,
+			rect:      Rect{Left: 1820, Top: 100, Right: 2220, Bottom: 400},
+			defaultTo: DefaultMonitorNull,
+			want:      intPtr(1),
+		},
+		{
+			name:      "outside all monitors, default null",
+			monitors:  baseMonitors,
+			rect:      Rect{Left: 4000, Top: 100, Right: 4500, Bottom: 400},
+			defaultTo: DefaultMonitorNull,
+			want:      nil,
+		},
+		{
+			name:      "outside all monitors, default primary",
+			monitors:  baseMonitors,
+			rect:      Rect{Left: 4000, Top: 100, Right: 4500, Bottom: 400},
+			defaultTo: DefaultMonitorPrimary,
+			want:      intPtr(0), // primary monitor (contains 0,0)
+		},
+		{
+			name:      "outside all monitors, default nearest",
+			monitors:  baseMonitors,
+			rect:      Rect{Left: 4000, Top: 100, Right: 4500, Bottom: 400},
+			defaultTo: DefaultMonitorNearest,
+			want:      intPtr(1), // second monitor is closer
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FindMonitorFromLogicalRect(monitors, tt.rect)
-			if tt.wantIndex == -1 {
+			got := FindMonitorFromScreenRect(tt.monitors, tt.rect, tt.defaultTo)
+			if tt.want == nil {
 				if got != nil {
-					t.Errorf("FindMonitorFromLogicalRect(%+v) = %+v, want nil", tt.rect, got)
+					t.Errorf("FindMonitorFromScreenRect() = %v, want nil", got)
 				}
-			} else {
-				if got == nil {
-					t.Errorf("FindMonitorFromLogicalRect(%+v) = nil, want monitor at index %d", tt.rect, tt.wantIndex)
-					return
-				}
-				if got != &monitors[tt.wantIndex] {
-					t.Errorf("FindMonitorFromLogicalRect(%+v) got monitor at wrong index", tt.rect)
-				}
+			} else if got != &tt.monitors[*tt.want] {
+				t.Errorf("FindMonitorFromScreenRect() = %v, want monitor %d", got, *tt.want)
 			}
 		})
 	}
 }
 
-func TestOverlapArea(t *testing.T) {
-	tests := []struct {
-		name string
-		r1   Rect
-		r2   Rect
-		want int
-	}{
-		{
-			name: "no overlap",
-			r1:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
-			r2:   Rect{Left: 200, Top: 200, Right: 300, Bottom: 300},
-			want: 0,
-		},
-		{
-			name: "full overlap",
-			r1:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
-			r2:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
-			want: 10000,
-		},
-		{
-			name: "partial overlap",
-			r1:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
-			r2:   Rect{Left: 50, Top: 50, Right: 150, Bottom: 150},
-			want: 2500,
-		},
-		{
-			name: "edge touch",
-			r1:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
-			r2:   Rect{Left: 100, Top: 0, Right: 200, Bottom: 100},
-			want: 0,
-		},
-		{
-			name: "zero width first rect",
-			r1:   Rect{Left: 0, Top: 0, Right: 0, Bottom: 100},
-			r2:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
-			want: 0,
-		},
-		{
-			name: "zero height second rect",
-			r1:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 100},
-			r2:   Rect{Left: 50, Top: 50, Right: 150, Bottom: 50},
-			want: 0,
-		},
-		{
-			name: "negative width",
-			r1:   Rect{Left: 100, Top: 0, Right: 0, Bottom: 100},
-			r2:   Rect{Left: 0, Top: 0, Right: 50, Bottom: 100},
-			want: 0,
-		},
-		{
-			name: "negative height",
-			r1:   Rect{Left: 0, Top: 100, Right: 100, Bottom: 0},
-			r2:   Rect{Left: 0, Top: 0, Right: 100, Bottom: 50},
-			want: 0,
-		},
+func TestFindMonitorFromScreenPoint(t *testing.T) {
+	baseMonitors := []Monitor{
+		{Bounds: Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080}},
+		{Bounds: Rect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080}},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := getOverlapArea(tt.r1, tt.r2)
-			if got != tt.want {
-				t.Errorf("getOverlapArea() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFindMonitorFromLogicalRect_EdgeCases(t *testing.T) {
-	monitors := createTestMonitors()
 	tests := []struct {
 		name      string
-		rect      Rect
-		wantIndex int // -1 means no monitor should be found
+		monitors  []Monitor
+		x, y      int
+		defaultTo DefaultMonitorMode
+		want      *int // index in monitors array, nil for no monitor
 	}{
 		{
-			name:      "zero size window",
-			rect:      Rect{Left: 960, Top: 540, Right: 960, Bottom: 540},
-			wantIndex: -1, // invalid rectangle should return nil
+			name:      "empty monitors",
+			monitors:  []Monitor{},
+			x:         100,
+			y:         100,
+			defaultTo: DefaultMonitorNull,
+			want:      nil,
 		},
 		{
-			name:      "single pixel window at monitor edge",
-			rect:      Rect{Left: 1919, Top: 0, Right: 1920, Bottom: 1},
-			wantIndex: 0,
+			name:      "point in first monitor",
+			monitors:  baseMonitors,
+			x:         960,
+			y:         540,
+			defaultTo: DefaultMonitorNull,
+			want:      intPtr(0),
 		},
 		{
-			name:      "negative size window",
-			rect:      Rect{Left: 1000, Top: 1000, Right: 900, Bottom: 900},
-			wantIndex: -1, // invalid rectangle should return nil
+			name:      "point in second monitor",
+			monitors:  baseMonitors,
+			x:         2880,
+			y:         540,
+			defaultTo: DefaultMonitorNull,
+			want:      intPtr(1),
 		},
 		{
-			name:      "window exactly at monitor boundary",
-			rect:      Rect{Left: 1920, Top: 0, Right: 1920, Bottom: 1080},
-			wantIndex: -1, // zero-width rectangle should return nil
+			name:      "point on edge of first monitor",
+			monitors:  baseMonitors,
+			x:         1919,
+			y:         1079,
+			defaultTo: DefaultMonitorNull,
+			want:      intPtr(0),
+		},
+		{
+			name:      "point outside all monitors, default null",
+			monitors:  baseMonitors,
+			x:         4000,
+			y:         540,
+			defaultTo: DefaultMonitorNull,
+			want:      nil,
+		},
+		{
+			name:      "point outside all monitors, default primary",
+			monitors:  baseMonitors,
+			x:         4000,
+			y:         540,
+			defaultTo: DefaultMonitorPrimary,
+			want:      intPtr(0), // primary monitor (contains 0,0)
+		},
+		{
+			name:      "point outside all monitors, default nearest",
+			monitors:  baseMonitors,
+			x:         4000,
+			y:         540,
+			defaultTo: DefaultMonitorNearest,
+			want:      intPtr(1), // second monitor is closer
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FindMonitorFromLogicalRect(monitors, tt.rect)
-			if tt.wantIndex == -1 {
+			got := FindMonitorFromScreenPoint(tt.monitors, tt.x, tt.y, tt.defaultTo)
+			if tt.want == nil {
 				if got != nil {
-					t.Errorf("FindMonitorFromLogicalRect(%+v) = %+v, want nil", tt.rect, got)
+					t.Errorf("FindMonitorFromScreenPoint() = %v, want nil", got)
 				}
-			} else {
-				if got == nil {
-					t.Errorf("FindMonitorFromLogicalRect(%+v) = nil, want monitor at index %d", tt.rect, tt.wantIndex)
-					return
-				}
-				if got != &monitors[tt.wantIndex] {
-					t.Errorf("FindMonitorFromLogicalRect(%+v) got monitor at wrong index", tt.rect)
-				}
+			} else if got != &tt.monitors[*tt.want] {
+				t.Errorf("FindMonitorFromScreenPoint() = %v, want monitor %d", got, *tt.want)
 			}
 		})
 	}
+}
+
+// Helper function to create pointer to int
+func intPtr(i int) *int {
+	return &i
 }

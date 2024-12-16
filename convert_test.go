@@ -3,33 +3,28 @@ package multimon
 import "testing"
 
 func TestCoordinateConversion(t *testing.T) {
-	// Test monitor with different logical and physical coordinates
+	// Test monitor with 200% scaling
 	m := Monitor{
-		LogicalBounds: Rect{
-			Left:   0,
-			Top:    0,
-			Right:  1920,
-			Bottom: 1080,
-		},
-		PhysicalBounds: Rect{
+		Bounds: Rect{
 			Left:   0,
 			Top:    0,
 			Right:  3840,
 			Bottom: 2160,
 		},
+		Scale: 2.0,
 	}
 
 	tests := []struct {
-		name     string
-		logical  Rect
-		physical Rect
+		name    string
+		logical Rect
+		screen  Rect
 	}{
 		{
 			name: "origin",
 			logical: Rect{
 				Left: 0, Top: 0, Right: 100, Bottom: 100,
 			},
-			physical: Rect{
+			screen: Rect{
 				Left: 0, Top: 0, Right: 200, Bottom: 200,
 			},
 		},
@@ -38,7 +33,7 @@ func TestCoordinateConversion(t *testing.T) {
 			logical: Rect{
 				Left: 960, Top: 540, Right: 1060, Bottom: 640,
 			},
-			physical: Rect{
+			screen: Rect{
 				Left: 1920, Top: 1080, Right: 2120, Bottom: 1280,
 			},
 		},
@@ -47,90 +42,85 @@ func TestCoordinateConversion(t *testing.T) {
 			logical: Rect{
 				Left: 1820, Top: 980, Right: 1920, Bottom: 1080,
 			},
-			physical: Rect{
+			screen: Rect{
 				Left: 3640, Top: 1960, Right: 3840, Bottom: 2160,
 			},
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name+"-LogicalToPhysical", func(t *testing.T) {
-			got := LogicalToPhysical(m, tt.logical)
-			if got != tt.physical {
-				t.Errorf("LogicalToPhysical() = %+v, want %+v", got, tt.physical)
+		t.Run(tt.name+"-LogicalToScreenRect", func(t *testing.T) {
+			got := LogicalToScreenRect(m, tt.logical)
+			if got != tt.screen {
+				t.Errorf("LogicalToScreenRect() = %+v, want %+v", got, tt.screen)
 			}
 		})
 
-		t.Run(tt.name+"-PhysicalToLogical", func(t *testing.T) {
-			got := PhysicalToLogical(m, tt.physical)
+		t.Run(tt.name+"-ScreenToLogicalRect", func(t *testing.T) {
+			got := ScreenToLogicalRect(m, tt.screen)
 			if got != tt.logical {
-				t.Errorf("PhysicalToLogical() = %+v, want %+v", got, tt.logical)
+				t.Errorf("ScreenToLogicalRect() = %+v, want %+v", got, tt.logical)
 			}
 		})
 	}
 }
 
-func TestContainsPoint(t *testing.T) {
+func TestPointConversion(t *testing.T) {
+	// Test monitor with 200% scaling
 	m := Monitor{
-		LogicalBounds: Rect{
-			Left:   0,
-			Top:    0,
-			Right:  1920,
-			Bottom: 1080,
-		},
-		PhysicalBounds: Rect{
+		Bounds: Rect{
 			Left:   0,
 			Top:    0,
 			Right:  3840,
 			Bottom: 2160,
 		},
+		Scale: 2.0,
 	}
 
 	tests := []struct {
-		name         string
-		x, y         int
-		wantLogical  bool
-		wantPhysical bool
-		isPhysical   bool
+		name     string
+		logicalX int
+		logicalY int
+		screenX  int
+		screenY  int
 	}{
 		{
-			name: "inside-logical",
-			x:    960, y: 540,
-			wantLogical: true,
-			isPhysical:  false,
+			name:     "origin",
+			logicalX: 0,
+			logicalY: 0,
+			screenX:  0,
+			screenY:  0,
 		},
 		{
-			name: "outside-logical",
-			x:    2000, y: 540,
-			wantLogical: false,
-			isPhysical:  false,
+			name:     "center",
+			logicalX: 960,
+			logicalY: 540,
+			screenX:  1920,
+			screenY:  1080,
 		},
 		{
-			name: "inside-physical",
-			x:    1920, y: 1080,
-			wantPhysical: true,
-			isPhysical:   true,
-		},
-		{
-			name: "outside-physical",
-			x:    4000, y: 1080,
-			wantPhysical: false,
-			isPhysical:   true,
+			name:     "bottom-right",
+			logicalX: 1920,
+			logicalY: 1080,
+			screenX:  3840,
+			screenY:  2160,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if !tt.isPhysical {
-				got := ContainsLogicalPoint(m, tt.x, tt.y)
-				if got != tt.wantLogical {
-					t.Errorf("ContainsLogicalPoint(%d, %d) = %v, want %v", tt.x, tt.y, got, tt.wantLogical)
-				}
-			} else {
-				got := ContainsPhysicalPoint(m, tt.x, tt.y)
-				if got != tt.wantPhysical {
-					t.Errorf("ContainsPhysicalPoint(%d, %d) = %v, want %v", tt.x, tt.y, got, tt.wantPhysical)
-				}
+		t.Run(tt.name+"-LogicalToScreenPoint", func(t *testing.T) {
+			got := LogicalToScreenPoint(m, tt.logicalX, tt.logicalY)
+			want := Point{X: tt.screenX, Y: tt.screenY}
+			if got != want {
+				t.Errorf("LogicalToScreenPoint(%d, %d) = %+v, want %+v", tt.logicalX, tt.logicalY, got, want)
+			}
+		})
+
+		t.Run(tt.name+"-ScreenToLogicalPoint", func(t *testing.T) {
+			got := ScreenToLogicalPoint(m, tt.screenX, tt.screenY)
+			want := Point{X: tt.logicalX, Y: tt.logicalY}
+			if got != want {
+				t.Errorf("ScreenToLogicalPoint(%d, %d) = %+v, want %+v", tt.screenX, tt.screenY, got, want)
 			}
 		})
 	}
@@ -138,18 +128,13 @@ func TestContainsPoint(t *testing.T) {
 
 func TestRoundTrip(t *testing.T) {
 	m := Monitor{
-		LogicalBounds: Rect{
-			Left:   100,
-			Top:    200,
-			Right:  2020,
-			Bottom: 1280,
+		Bounds: Rect{
+			Left:   0,
+			Top:    0,
+			Right:  3840,
+			Bottom: 2160,
 		},
-		PhysicalBounds: Rect{
-			Left:   200,
-			Top:    400,
-			Right:  4040,
-			Bottom: 2560,
-		},
+		Scale: 2.0,
 	}
 
 	// Test various points to ensure they convert back correctly
@@ -160,10 +145,26 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	for i, point := range testPoints {
-		physical := LogicalToPhysical(m, point)
-		logical := PhysicalToLogical(m, physical)
+		screen := LogicalToScreenRect(m, point)
+		logical := ScreenToLogicalRect(m, screen)
 		if logical != point {
 			t.Errorf("Point %d: Round trip conversion failed. Started with %+v, got back %+v", i, point, logical)
+		}
+	}
+
+	// Test point round trips
+	testCoords := []struct{ x, y int }{
+		{150, 250},
+		{1500, 1000},
+		{500, 600},
+	}
+
+	for i, coord := range testCoords {
+		screen := LogicalToScreenPoint(m, coord.x, coord.y)
+		logical := ScreenToLogicalPoint(m, screen.X, screen.Y)
+		if logical.X != coord.x || logical.Y != coord.y {
+			t.Errorf("Coord %d: Round trip conversion failed. Started with (%d,%d), got back (%d,%d)",
+				i, coord.x, coord.y, logical.X, logical.Y)
 		}
 	}
 }

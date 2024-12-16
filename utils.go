@@ -16,8 +16,9 @@ func getOverlapArea(r1, r2 Rect) int {
 	return 0
 }
 
-// getEdgeDistance calculates the Manhattan distance from window center to monitor bounds.
-// Returns 0 if window center is inside bounds.
+// getEdgeDistance calculates the Manhattan distance from window center to nearest monitor edge.
+// Returns 0 if window center is inside monitor bounds, otherwise returns the sum of
+// horizontal and vertical distances to the nearest edges.
 func getEdgeDistance(window, bounds Rect) int {
 	windowCenterX := (window.Left + window.Right) / 2
 	windowCenterY := (window.Top + window.Bottom) / 2
@@ -38,6 +39,48 @@ func getEdgeDistance(window, bounds Rect) int {
 	return dx + dy
 }
 
+// fitRectDimension fits a dimension within bounds and returns the fitted size and position.
+// If size exceeds available space, it is clamped to bounds.
+// Position is adjusted to keep the dimension within bounds while maintaining size.
+// Returns (pos, 0) if size is negative.
+// Returns (boundsMin, 0) if min > max.
+func fitRectDimension(pos, size, boundsMin, boundsMax int) (newPos, newSize int) {
+	// Handle negative size
+	if size < 0 {
+		return pos, 0
+	}
+
+	// Handle invalid bounds
+	if boundsMin > boundsMax {
+		return boundsMin, 0
+	}
+
+	// First fit the size
+	if size > boundsMax-boundsMin {
+		size = boundsMax - boundsMin
+	}
+
+	// Then fit the position
+	if pos+size > boundsMax {
+		pos = boundsMax - size
+	}
+	if pos < boundsMin {
+		pos = boundsMin
+	}
+
+	return pos, size
+}
+
+// scaleRect scales a rectangle by the given scale factor
+func scaleRect(r Rect, scale float64) Rect {
+	return Rect{
+		Left:   int(float64(r.Left) * scale),
+		Top:    int(float64(r.Top) * scale),
+		Right:  int(float64(r.Right) * scale),
+		Bottom: int(float64(r.Bottom) * scale),
+	}
+}
+
 // min returns the smaller of two integers
 func min(a, b int) int {
 	if a < b {
@@ -52,29 +95,4 @@ func max(a, b int) int {
 		return a
 	}
 	return b
-}
-
-// getRectArea returns the area of a rectangle
-func getRectArea(r Rect) int {
-	width := r.Right - r.Left
-	height := r.Bottom - r.Top
-	if width <= 0 || height <= 0 {
-		return 0
-	}
-	return width * height
-}
-
-// getRectWidth returns the width of a rectangle
-func getRectWidth(r Rect) int {
-	return r.Right - r.Left
-}
-
-// getRectHeight returns the height of a rectangle
-func getRectHeight(r Rect) int {
-	return r.Bottom - r.Top
-}
-
-// getRectCenter returns the center point of a rectangle
-func getRectCenter(r Rect) (x, y int) {
-	return (r.Left + r.Right) / 2, (r.Top + r.Bottom) / 2
 }
