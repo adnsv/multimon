@@ -53,8 +53,9 @@ func CalcPlacementSize(m *Monitor, desiredWidth, desiredHeight, minWidth, minHei
 // - minWidth, minHeight: minimum required window size in logical units
 // - margin: minimum distance from work area edges in logical units
 //
-// Returns a Rect with the calculated window position and size in screen units.
-func InitialPlacement(desiredWidth, desiredHeight, minWidth, minHeight, margin int) Rect {
+// Returns a Rect with the calculated window position and size in screen units,
+// and the scale factor of the selected monitor (1.0 if no monitor is available).
+func InitialPlacement(desiredWidth, desiredHeight, minWidth, minHeight, margin int) (Rect, float64) {
 	monitors := GetMonitors()
 	if len(monitors) == 0 {
 		width, height := CalcPlacementSize(nil, desiredWidth, desiredHeight, minWidth, minHeight, margin)
@@ -63,11 +64,15 @@ func InitialPlacement(desiredWidth, desiredHeight, minWidth, minHeight, margin i
 			Top:    0,
 			Right:  width,
 			Bottom: height,
-		}
+		}, 1.0
 	}
 
 	// Find default mon (containing 0,0 or first available)
 	mon := FindPrimaryMonitor(monitors)
+	monitorScale := 1.0
+	if mon != nil {
+		monitorScale = mon.Scale
+	}
 
 	width, height := CalcPlacementSize(mon, desiredWidth, desiredHeight, minWidth, minHeight, margin)
 
@@ -80,5 +85,5 @@ func InitialPlacement(desiredWidth, desiredHeight, minWidth, minHeight, margin i
 		Top:    centerY - height/2,
 		Right:  centerX + (width+1)/2,
 		Bottom: centerY + (height+1)/2,
-	}
+	}, monitorScale
 }
