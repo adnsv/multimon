@@ -60,23 +60,31 @@ func GetPlatformMonitors() []types.Monitor {
 	// Get number of monitors
 	numMonitors := int(C.GetNumMonitors())
 
+	// Get main screen height for Y-coordinate conversion
+	mainScreen := C.GetMonitorInfo(0)
+	mainHeight := int(mainScreen.height)
+
 	// Iterate through monitors
 	for i := 0; i < numMonitors; i++ {
 		info := C.GetMonitorInfo(C.int(i))
+
+		// Convert Y coordinates by subtracting from main screen height
+		y := mainHeight - (int(info.y) + int(info.height))
+		workY := mainHeight - (int(info.workY) + int(info.workHeight))
 
 		// Create monitor with screen coordinates in points (macOS native units)
 		m := types.Monitor{
 			Bounds: types.Rect{
 				Left:   int(info.x),
-				Top:    int(info.y),
+				Top:    y,
 				Right:  int(info.x + info.width),
-				Bottom: int(info.y + info.height),
+				Bottom: y + int(info.height),
 			},
 			WorkArea: types.Rect{
 				Left:   int(info.workX),
-				Top:    int(info.workY),
+				Top:    workY,
 				Right:  int(info.workX + info.workWidth),
-				Bottom: int(info.workY + info.workHeight),
+				Bottom: workY + int(info.workHeight),
 			},
 			Scale: 1.0, // Always 1.0 since we work with screen points
 		}
