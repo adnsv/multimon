@@ -95,3 +95,48 @@ development packages:
 - **Linux**: `gtk3-dev` (or `libgtk-3-dev` on Debian/Ubuntu)
 - **macOS**: Xcode Command Line Tools (provides Foundation, Cocoa, and AppKit
   frameworks)
+
+## Units Package
+
+The `units` subpackage provides flexible dimension types for specifying window
+sizes using different measurement units:
+
+- **Pixels**: Absolute pixel values (e.g., `1024`, `768`)
+- **Em units**: Relative to system font em-height (e.g., `60em`, `40em`)
+- **Percentages**: Relative to work area dimensions (e.g., `80%`, `70%`)
+
+### Usage
+
+```go
+import "github.com/adnsv/multimon/units"
+
+// Parse dimension strings
+width := units.ParseDimension("60em")   // 60 em units
+height := units.ParseDimension("80%")   // 80% of work area
+minW := units.ParseDimension("400")     // 400 pixels
+
+// Or create dimensions programmatically
+width := units.Ems(60)
+height := units.Pct(80)
+minW := units.Pixels(400)
+
+// Resolve to pixels using a context
+ctx := units.ResolveContext{
+    EmHeight: 16,  // System em-height in pixels
+    WorkArea: units.WorkArea{Width: 1920, Height: 1080},
+}
+pixelWidth := width.ResolveWidth(ctx)   // 60 * 16 = 960
+pixelHeight := height.ResolveHeight(ctx) // 80% of 1080 = 864
+```
+
+### Dimension String Format
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| `<number>` | `1024` | Absolute pixels |
+| `<number>px` | `1024px` | Absolute pixels (explicit) |
+| `<number>em` | `60em` | Multiple of system em-height |
+| `<number>%` | `80%` | Percentage of work area |
+
+Em units are particularly useful for creating resolution-independent window sizes
+that scale appropriately with the user's font settings.
