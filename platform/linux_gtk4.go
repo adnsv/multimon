@@ -1,14 +1,14 @@
-//go:build linux
-// +build linux
+//go:build linux && gtk4
+// +build linux,gtk4
 
 package platform
 
 /*
-#cgo linux pkg-config: gtk+-3.0
+#cgo linux pkg-config: gtk4 gtk4-x11
 
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
-#include <string.h>
+#include <gdk/x11/gdkx.h>
 
 typedef struct Monitor {
     int x;
@@ -19,17 +19,17 @@ typedef struct Monitor {
     int workY;
     int workWidth;
     int workHeight;
-    int scaleFactor;     // from gdk_monitor_get_scale_factor
+    int scaleFactor;
 } Monitor;
 
-Monitor GetMonitorInfo(GdkMonitor *monitor) {
+Monitor GetMonitorInfo(GdkDisplay *display, GdkMonitor *monitor) {
     Monitor result;
-    GdkRectangle geometry, workarea;
+    GdkRectangle geometry;
+    GdkRectangle workarea;
 
     gdk_monitor_get_geometry(monitor, &geometry);
-    gdk_monitor_get_workarea(monitor, &workarea);
 
-    // Get integer scale factor (GTK3 only supports integer scaling)
+    // GTK4: get_scale_factor returns integer scale
     result.scaleFactor = gdk_monitor_get_scale_factor(monitor);
 
     // Store screen coordinates
@@ -37,10 +37,21 @@ Monitor GetMonitorInfo(GdkMonitor *monitor) {
     result.y = geometry.y;
     result.width = geometry.width;
     result.height = geometry.height;
-    result.workX = workarea.x;
-    result.workY = workarea.y;
-    result.workWidth = workarea.width;
-    result.workHeight = workarea.height;
+
+    // GTK4 removed gdk_monitor_get_workarea, but X11 backend still has it
+    if (GDK_IS_X11_DISPLAY(display)) {
+        gdk_x11_monitor_get_workarea(monitor, &workarea);
+        result.workX = workarea.x;
+        result.workY = workarea.y;
+        result.workWidth = workarea.width;
+        result.workHeight = workarea.height;
+    } else {
+        // Wayland: no standard work area API, fall back to geometry
+        result.workX = geometry.x;
+        result.workY = geometry.y;
+        result.workWidth = geometry.width;
+        result.workHeight = geometry.height;
+    }
 
     return result;
 }
@@ -51,8 +62,8 @@ import (
 )
 
 func init() {
-	// Initialize GTK
-	C.gtk_init_check(nil, nil)
+	// Initialize GTK4
+	C.gtk_init()
 }
 
 // GetPlatformMonitors returns monitor information
@@ -65,20 +76,24 @@ func GetPlatformMonitors() []types.Monitor {
 		return monitors
 	}
 
-	// Get number of monitors
-	n_monitors := int(C.gdk_display_get_n_monitors(display))
+	// GTK4: gdk_display_get_monitors returns a GListModel
+	monitorList := C.gdk_display_get_monitors(display)
+	if monitorList == nil {
+		return monitors
+	}
 
-	// Iterate through monitors
+	n_monitors := int(C.g_list_model_get_n_items(monitorList))
+
 	for i := 0; i < n_monitors; i++ {
-		monitor := C.gdk_display_get_monitor(display, C.int(i))
-		if monitor == nil {
+		monitorPtr := C.g_list_model_get_item(monitorList, C.guint(i))
+		if monitorPtr == nil {
 			continue
 		}
+		monitor := (*C.GdkMonitor)(monitorPtr)
 
-		info := C.GetMonitorInfo(monitor)
+		info := C.GetMonitorInfo(display, monitor)
 		scale := float64(info.scaleFactor)
 
-		// Create monitor with screen coordinates and scale factor
 		m := types.Monitor{
 			Bounds: types.Rect{
 				Left:   int(info.x),
@@ -96,6 +111,7 @@ func GetPlatformMonitors() []types.Monitor {
 		}
 
 		monitors = append(monitors, m)
+		C.g_object_unref(C.gpointer(monitorPtr))
 	}
 
 	return monitors

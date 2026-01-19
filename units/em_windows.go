@@ -8,15 +8,59 @@ import (
 )
 
 var (
-	gdi32               = syscall.NewLazyDLL("gdi32.dll")
-	user32              = syscall.NewLazyDLL("user32.dll")
-	procCreateFontW     = gdi32.NewProc("CreateFontW")
-	procSelectObject    = gdi32.NewProc("SelectObject")
-	procGetTextMetricsW = gdi32.NewProc("GetTextMetricsW")
-	procDeleteObject    = gdi32.NewProc("DeleteObject")
-	procGetDC           = user32.NewProc("GetDC")
-	procReleaseDC       = user32.NewProc("ReleaseDC")
+	gdi32                    = syscall.NewLazyDLL("gdi32.dll")
+	user32                   = syscall.NewLazyDLL("user32.dll")
+	procCreateFontIndirectW  = gdi32.NewProc("CreateFontIndirectW")
+	procSelectObject         = gdi32.NewProc("SelectObject")
+	procGetTextMetricsW      = gdi32.NewProc("GetTextMetricsW")
+	procDeleteObject         = gdi32.NewProc("DeleteObject")
+	procGetDC                = user32.NewProc("GetDC")
+	procReleaseDC            = user32.NewProc("ReleaseDC")
+	procSystemParametersInfo = user32.NewProc("SystemParametersInfoW")
 )
+
+const (
+	SPI_GETNONCLIENTMETRICS = 0x0029
+	LF_FACESIZE             = 32
+)
+
+// LOGFONTW structure
+type logFontW struct {
+	LfHeight         int32
+	LfWidth          int32
+	LfEscapement     int32
+	LfOrientation    int32
+	LfWeight         int32
+	LfItalic         uint8
+	LfUnderline      uint8
+	LfStrikeOut      uint8
+	LfCharSet        uint8
+	LfOutPrecision   uint8
+	LfClipPrecision  uint8
+	LfQuality        uint8
+	LfPitchAndFamily uint8
+	LfFaceName       [LF_FACESIZE]uint16
+}
+
+// NONCLIENTMETRICSW structure
+type nonClientMetricsW struct {
+	CbSize           uint32
+	IBorderWidth     int32
+	IScrollWidth     int32
+	IScrollHeight    int32
+	ICaptionWidth    int32
+	ICaptionHeight   int32
+	LfCaptionFont    logFontW
+	ISmCaptionWidth  int32
+	ISmCaptionHeight int32
+	LfSmCaptionFont  logFontW
+	IMenuWidth       int32
+	IMenuHeight      int32
+	LfMenuFont       logFontW
+	LfStatusFont     logFontW
+	LfMessageFont    logFontW
+	IPaddedBorderWidth int32
+}
 
 // TEXTMETRICW structure for GetTextMetricsW
 type textMetricW struct {
@@ -42,50 +86,43 @@ type textMetricW struct {
 	TmCharSet          uint8
 }
 
-const (
-	DEFAULT_CHARSET = 1
-	FW_NORMAL       = 400
-)
-
 // GetEmHeight returns the system font em-height in pixels.
-// Uses Segoe UI (Windows system font) metrics.
+// Uses SystemParametersInfo to get the actual system UI font (lfMessageFont).
 func GetEmHeight() int {
-	// Get screen DC
-	hdc, _, _ := procGetDC.Call(0)
-	if hdc == 0 {
+	// Get non-client metrics to retrieve the system message font
+	var ncm nonClientMetricsW
+	ncm.CbSize = uint32(unsafe.Sizeof(ncm))
+
+	ret, _, _ := procSystemParametersInfo.Call(
+		SPI_GETNONCLIENTMETRICS,
+		uintptr(ncm.CbSize),
+		uintptr(unsafe.Pointer(&ncm)),
+		0,
+	)
+	if ret == 0 {
 		return 16 // fallback
 	}
-	defer procReleaseDC.Call(0, hdc)
 
-	// Create Segoe UI font at default size (0 = system default)
-	fontName, _ := syscall.UTF16PtrFromString("Segoe UI")
-	hFont, _, _ := procCreateFontW.Call(
-		0,               // height (0 = default)
-		0,               // width
-		0,               // escapement
-		0,               // orientation
-		FW_NORMAL,       // weight
-		0,               // italic
-		0,               // underline
-		0,               // strikeout
-		DEFAULT_CHARSET, // charset
-		0,               // output precision
-		0,               // clip precision
-		0,               // quality
-		0,               // pitch and family
-		uintptr(unsafe.Pointer(fontName)),
-	)
+	// Create font from lfMessageFont (the system UI font)
+	hFont, _, _ := procCreateFontIndirectW.Call(uintptr(unsafe.Pointer(&ncm.LfMessageFont)))
 	if hFont == 0 {
 		return 16
 	}
 	defer procDeleteObject.Call(hFont)
+
+	// Get screen DC
+	hdc, _, _ := procGetDC.Call(0)
+	if hdc == 0 {
+		return 16
+	}
+	defer procReleaseDC.Call(0, hdc)
 
 	// Select font and get metrics
 	oldFont, _, _ := procSelectObject.Call(hdc, hFont)
 	defer procSelectObject.Call(hdc, oldFont)
 
 	var tm textMetricW
-	ret, _, _ := procGetTextMetricsW.Call(hdc, uintptr(unsafe.Pointer(&tm)))
+	ret, _, _ = procGetTextMetricsW.Call(hdc, uintptr(unsafe.Pointer(&tm)))
 	if ret == 0 {
 		return 16
 	}
