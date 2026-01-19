@@ -106,3 +106,13 @@ func FindMonitorFromScreenPoint(monitors []Monitor, x, y int, defaultTo DefaultM
 	}
 	return FindMonitorFromScreenRect(monitors, rect, defaultTo)
 }
+
+// GetWorkAreaForRect returns the work area of the monitor containing the given rect.
+// Returns an empty Rect if no monitors are available.
+func GetWorkAreaForRect(monitors []Monitor, rect Rect) Rect {
+	m := FindMonitorFromScreenRect(monitors, rect, DefaultMonitorNearest)
+	if m == nil {
+		return Rect{}
+	}
+	return m.WorkArea
+}

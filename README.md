@@ -140,3 +140,38 @@ pixelHeight := height.ResolveHeight(ctx) // 80% of 1080 = 864
 
 Em units are particularly useful for creating resolution-independent window sizes
 that scale appropriately with the user's font settings.
+
+## Core API
+
+### Monitor Enumeration
+
+```go
+// Get all connected monitors
+monitors := multimon.GetMonitors()
+```
+
+### Finding Monitors
+
+```go
+// Find monitor containing a screen point
+monitor := multimon.FindMonitorFromScreenPoint(monitors, x, y, multimon.DefaultMonitorNearest)
+
+// Find monitor with largest overlap with a rectangle
+monitor := multimon.FindMonitorFromScreenRect(monitors, rect, multimon.DefaultMonitorNearest)
+
+// Find primary monitor (contains 0,0 or first available)
+monitor := multimon.FindPrimaryMonitor(monitors)
+
+// Get work area for a window rectangle (convenience function)
+workArea := multimon.GetWorkAreaForRect(monitors, windowRect)
+```
+
+### Default Monitor Modes
+
+When no exact match is found, the `defaultTo` parameter controls fallback behavior:
+
+| Mode | Description |
+|------|-------------|
+| `DefaultMonitorNull` | Returns nil if no monitor matches |
+| `DefaultMonitorPrimary` | Returns the primary monitor |
+| `DefaultMonitorNearest` | Returns the monitor with smallest edge distance |
