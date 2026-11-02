@@ -19,9 +19,9 @@ func TestDimensionResolveWidth(t *testing.T) {
 		{"pixel fractional", Dimension{Value: 100.7, Unit: Pixel}, 100},
 
 		// Em values (multiplied by EmHeight)
-		{"em 60", Dimension{Value: 60, Unit: Em}, 960},   // 60 * 16 = 960
-		{"em 1", Dimension{Value: 1, Unit: Em}, 16},      // 1 * 16 = 16
-		{"em 1.5", Dimension{Value: 1.5, Unit: Em}, 24},  // 1.5 * 16 = 24
+		{"em 60", Dimension{Value: 60, Unit: Em}, 960},  // 60 * 16 = 960
+		{"em 1", Dimension{Value: 1, Unit: Em}, 16},     // 1 * 16 = 16
+		{"em 1.5", Dimension{Value: 1.5, Unit: Em}, 24}, // 1.5 * 16 = 24
 		{"em 0", Dimension{Value: 0, Unit: Em}, 0},
 
 		// Percent values (percentage of WorkArea.Width)
@@ -63,9 +63,9 @@ func TestDimensionResolveHeight(t *testing.T) {
 		{"pixel fractional", Dimension{Value: 100.9, Unit: Pixel}, 100},
 
 		// Em values (multiplied by EmHeight)
-		{"em 40", Dimension{Value: 40, Unit: Em}, 640},   // 40 * 16 = 640
-		{"em 1", Dimension{Value: 1, Unit: Em}, 16},      // 1 * 16 = 16
-		{"em 2.5", Dimension{Value: 2.5, Unit: Em}, 40},  // 2.5 * 16 = 40
+		{"em 40", Dimension{Value: 40, Unit: Em}, 640},  // 40 * 16 = 640
+		{"em 1", Dimension{Value: 1, Unit: Em}, 16},     // 1 * 16 = 16
+		{"em 2.5", Dimension{Value: 2.5, Unit: Em}, 40}, // 2.5 * 16 = 40
 		{"em 0", Dimension{Value: 0, Unit: Em}, 0},
 
 		// Percent values (percentage of WorkArea.Height)

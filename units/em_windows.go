@@ -44,21 +44,21 @@ type logFontW struct {
 
 // NONCLIENTMETRICSW structure
 type nonClientMetricsW struct {
-	CbSize           uint32
-	IBorderWidth     int32
-	IScrollWidth     int32
-	IScrollHeight    int32
-	ICaptionWidth    int32
-	ICaptionHeight   int32
-	LfCaptionFont    logFontW
-	ISmCaptionWidth  int32
-	ISmCaptionHeight int32
-	LfSmCaptionFont  logFontW
-	IMenuWidth       int32
-	IMenuHeight      int32
-	LfMenuFont       logFontW
-	LfStatusFont     logFontW
-	LfMessageFont    logFontW
+	CbSize             uint32
+	IBorderWidth       int32
+	IScrollWidth       int32
+	IScrollHeight      int32
+	ICaptionWidth      int32
+	ICaptionHeight     int32
+	LfCaptionFont      logFontW
+	ISmCaptionWidth    int32
+	ISmCaptionHeight   int32
+	LfSmCaptionFont    logFontW
+	IMenuWidth         int32
+	IMenuHeight        int32
+	LfMenuFont         logFontW
+	LfStatusFont       logFontW
+	LfMessageFont      logFontW
 	IPaddedBorderWidth int32
 }
 

@@ -4,8 +4,8 @@ import "testing"
 
 func TestCalcPlacementSize(t *testing.T) {
 	monitor := &Monitor{
-		Bounds:   Rect{0, 0, 1920, 1080},
-		WorkArea: Rect{0, 40, 1920, 1040},
+		Bounds:   Rect{Left: 0, Top: 0, Right: 1920, Bottom: 1080},
+		WorkArea: Rect{Left: 0, Top: 40, Right: 1920, Bottom: 1040},
 		Scale:    1.5,
 	}
 
