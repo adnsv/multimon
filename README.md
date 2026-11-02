@@ -81,7 +81,7 @@ Understanding "Effective" DPI terminology:
 
 - **Windows**: Native support via Win32 API (pure Go)
 - **macOS**: Support via Cocoa/AppKit (requires cgo)
-- **Linux**: Support via GTK3/GDK (requires cgo, gtk3-dev package)
+- **Linux**: Support via GTK4/GDK by default, or GTK3 with `-tags gtk3` (requires cgo)
 
 Each platform implementation provides:
 - Monitor enumeration
@@ -92,7 +92,9 @@ Each platform implementation provides:
 
 For non-Windows platforms, this package requires CGO and the appropriate
 development packages:
-- **Linux**: `gtk3-dev` (or `libgtk-3-dev` on Debian/Ubuntu)
+- **Linux**: `libgtk-4-dev` on Debian/Ubuntu (`gtk4-devel` on Fedora); with
+  `-tags gtk3`, `libgtk-3-dev` instead. The `gtk4` tag is still accepted and
+  changes nothing.
 - **macOS**: Xcode Command Line Tools (provides Foundation, Cocoa, and AppKit
   frameworks)
 

@@ -1,5 +1,5 @@
-//go:build linux && !gtk4
-// +build linux,!gtk4
+//go:build linux && gtk3
+// +build linux,gtk3
 
 package platform
 

@@ -3,8 +3,8 @@
 package units
 
 /*
-#cgo linux,!gtk4 pkg-config: gtk+-3.0 pango pangocairo
-#cgo linux,gtk4 pkg-config: gtk4 pango pangocairo
+#cgo linux,gtk3 pkg-config: gtk+-3.0 pango pangocairo
+#cgo linux,!gtk3 pkg-config: gtk4 pango pangocairo
 
 #include <gtk/gtk.h>
 #include <pango/pango.h>
