@@ -15,3 +15,18 @@ func TestGetPlatformMonitorsRepeated(t *testing.T) {
 		}
 	}
 }
+
+// GetDeviceCaps lives in gdi32.dll; the GetDpiForMonitor fallback calls it.
+func TestGetDeviceCapsResolves(t *testing.T) {
+	if err := procGetDeviceCaps.Find(); err != nil {
+		t.Fatalf("GetDeviceCaps not found: %v", err)
+	}
+	dc, _, _ := procGetDC.Call(0)
+	if dc == 0 {
+		t.Skip("no screen DC")
+	}
+	defer procReleaseDC.Call(0, dc)
+	if dpi, _, _ := procGetDeviceCaps.Call(dc, 88); dpi == 0 { // LOGPIXELSX
+		t.Fatal("GetDeviceCaps(LOGPIXELSX) returned 0")
+	}
+}

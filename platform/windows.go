@@ -13,13 +13,14 @@ import (
 
 var (
 	user32 = syscall.NewLazyDLL("user32.dll")
+	gdi32  = syscall.NewLazyDLL("gdi32.dll")
 	shcore = syscall.NewLazyDLL("shcore.dll")
 
 	procEnumDisplayMonitors    = user32.NewProc("EnumDisplayMonitors")
 	procGetMonitorInfo         = user32.NewProc("GetMonitorInfoW")
 	procGetDpiForMonitor       = shcore.NewProc("GetDpiForMonitor")
 	procGetDC                  = user32.NewProc("GetDC")
-	procGetDeviceCaps          = user32.NewProc("GetDeviceCaps")
+	procGetDeviceCaps          = gdi32.NewProc("GetDeviceCaps")
 	procReleaseDC              = user32.NewProc("ReleaseDC")
 	procSetProcessDPIAware     = user32.NewProc("SetProcessDPIAware")
 	procSetProcessDpiAwareness = shcore.NewProc("SetProcessDpiAwareness")
